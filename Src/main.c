@@ -52,6 +52,8 @@ OPAMP_HandleTypeDef hopamp3;
 
 TIM_HandleTypeDef htim1;
 
+UART_HandleTypeDef uart2;
+
 osThreadId defaultTaskHandle;
 /* USER CODE BEGIN PV */
 
@@ -66,10 +68,12 @@ static void MX_OPAMP1_Init(void);
 static void MX_OPAMP2_Init(void);
 static void MX_OPAMP3_Init(void);
 static void MX_TIM1_Init(void);
+static void MX_UART2_Init(void);
 void StartDefaultTask(void const * argument);
 
 /* USER CODE BEGIN PFP */
-
+void SetTimerFrequencyWith50pctDutyCycle(uint32_t freq);
+void SetTimerFrequencyAndDutyCycle(uint32_t freq, float dutyPct);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -112,6 +116,7 @@ int main(void)
   MX_OPAMP2_Init();
   MX_OPAMP3_Init();
   MX_TIM1_Init();
+  MX_UART2_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -202,6 +207,14 @@ void SystemClock_Config(void)
   */
   PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC12;
   PeriphClkInit.Adc12ClockSelection = RCC_ADC12CLKSOURCE_SYSCLK;//RCC_ADC12CLKSOURCE_PLL;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Initializes the peripherals clocks
+  */
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART2;
+  PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
@@ -634,6 +647,49 @@ static void MX_GPIO_Init(void)
 
 }
 
+/**
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_UART2_Init(void)
+{/* USER CODE BEGIN LPUART1_Init 0 */
+
+	  /* USER CODE END LPUART1_Init 0 */
+
+	  /* USER CODE BEGIN LPUART1_Init 1 */
+
+	  /* USER CODE END LPUART1_Init 1 */
+	  uart2.Instance = USART2;
+	  uart2.Init.BaudRate = 115200;
+	  uart2.Init.WordLength = UART_WORDLENGTH_8B;
+	  uart2.Init.StopBits = UART_STOPBITS_1;
+	  uart2.Init.Parity = UART_PARITY_NONE;
+	  uart2.Init.Mode = UART_MODE_TX_RX;
+	  uart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+	  uart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+	  uart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+	  if (HAL_UART_Init(&uart2) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }
+	  if (HAL_UARTEx_SetTxFifoThreshold(&uart2, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }
+	  if (HAL_UARTEx_SetRxFifoThreshold(&uart2, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }
+	  if (HAL_UARTEx_DisableFifoMode(&uart2) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }
+	  /* USER CODE BEGIN LPUART1_Init 2 */
+
+	  /* USER CODE END LPUART1_Init 2 */
+}
+
 /* USER CODE BEGIN 4 */
 uint8_t sampleIndex = 0;
 uint16_t ADC_Samples[4];
@@ -684,7 +740,13 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 						sample_low[sampleIndex_low] = tmp;
 						sampleIndex_low++;
 
-						SetTimerFrequencyWith50pctDutyCycle(100+10*sampleIndex_low);
+						//SetTimerFrequencyWith50pctDutyCycle(100+sampleIndex_low);
+						if (sampleIndex_low % 10 == 0) {
+							float duty = 0.1f;
+							float tmp = sampleIndex_low;
+							duty += tmp / 1000.f;
+							SetTimerFrequencyAndDutyCycle(2000, duty);
+						}
 					}
 				} else {
 					if (sampleIndex_high < SAMPLE_COUNT) {
@@ -738,10 +800,34 @@ void SetTimerFrequencyWith50pctDutyCycle(uint32_t freq)
 	uint16_t CENTER = END / 2;
 	uint16_t SampleDuty = (END*freq) / (1000000 / ADC_SAMPLE_TIME_US);
 
-    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, CENTER - SampleDuty); // sample location
-    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, END - SampleDuty); // sample location
-    //__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, CENTER/2 - SampleDuty); // sample location
-    //__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, END - CENTER/2 - SampleDuty); // sample location
+    //__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, CENTER - SampleDuty); // sample location
+    //__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, END - SampleDuty); // sample location
+    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, CENTER/2 - SampleDuty); // sample location
+    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, END - CENTER/2 - SampleDuty); // sample location
+
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, CENTER);
+}
+
+void SetTimerFrequencyAndDutyCycle(uint32_t freq, float dutyPct)
+{
+	const uint32_t PCLK = 170000000;
+	const uint16_t PRESCALER = 32;
+	const float ADC_SAMPLE_TIME_US = 20; // 16 us // See MATLAB script: 'ADC_Configuration.m'
+
+	uint32_t ARR = (PCLK / (uint32_t)(freq*(PRESCALER+1))) - 1;
+	__HAL_TIM_SET_AUTORELOAD(&htim1, ARR);
+
+	if (dutyPct > 1) dutyPct = 1.0;
+
+	uint16_t END = ARR + 1;
+	uint16_t CENTER = END * dutyPct;
+	uint16_t SampleDuty = (END*freq) / (1000000 / ADC_SAMPLE_TIME_US);
+
+    //__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, CENTER - SampleDuty); // sample location
+    //__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, END - SampleDuty); // sample location
+    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, CENTER/2 - SampleDuty); // sample location
+    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, (END - CENTER) / 2 + CENTER - SampleDuty); // sample location
 
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, CENTER);
@@ -869,7 +955,8 @@ void StartDefaultTask(void const * argument)
 	currentSenseOffsetSampleCount = CURRENT_SENSE_OFFSET_SAMPLE_COUNT_FINISHED + 1; // marks that offset computation has finished
 	osDelay(1000); // wait for stabilization
 
-	SetTimerFrequencyWith50pctDutyCycle(100);
+	//SetTimerFrequencyWith50pctDutyCycle(100);
+	SetTimerFrequencyAndDutyCycle(2000, 0.1);
 
 	recordSamples = 1;
 
@@ -880,6 +967,14 @@ void StartDefaultTask(void const * argument)
 
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, 0);
+
+
+	HAL_UART_Transmit(&uart2, time_low, sizeof(time_low), 0xFFFF);
+	HAL_UART_Transmit(&uart2, sample_low, sizeof(sample_low), 0xFFFF);
+	HAL_UART_Transmit(&uart2, time_high, sizeof(time_high), 0xFFFF);
+	HAL_UART_Transmit(&uart2, sample_high, sizeof(sample_high), 0xFFFF);
+	HAL_UART_Transmit(&uart2, time_vin, sizeof(time_vin), 0xFFFF);
+	HAL_UART_Transmit(&uart2, sample_vin, sizeof(sample_vin), 0xFFFF);
 
 	while (1)
 		osDelay(1);
