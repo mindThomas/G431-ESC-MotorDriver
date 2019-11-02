@@ -1,0 +1,38 @@
+/SW4STM32/G431-ESC-Firmware/Debug/
+/SW4STM32/G431-ESC-Firmware/.settings/
+
+G431-ESC-Firmware.elf.launch
+G431-ESC-Firmware_converter.log
+
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
