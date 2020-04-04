@@ -275,7 +275,7 @@ static void MX_ADC1_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_3;
   sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_640CYCLES_5;
+  sConfig.SamplingTime = ADC_SAMPLETIME_47CYCLES_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
   sConfig.OffsetNumber = ADC_OFFSET_NONE;
   sConfig.Offset = 0;
@@ -362,7 +362,7 @@ static void MX_ADC2_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_1;
   sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_640CYCLES_5;
+  sConfig.SamplingTime = ADC_SAMPLETIME_47CYCLES_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
   sConfig.OffsetNumber = ADC_OFFSET_NONE;
   sConfig.Offset = 0;
@@ -550,21 +550,21 @@ static void MX_TIM1_Init(void)
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
   sConfigOC.Pulse = 0;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
-  sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
   if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
   }
-  sConfigOC.Pulse = 0;
   if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_2) != HAL_OK)
   {
     Error_Handler();
   }
-  sConfigOC.Pulse = 0;
   if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
   {
     Error_Handler();
   }
@@ -700,14 +700,14 @@ const uint32_t CURRENT_SENSE_OFFSET_SAMPLE_COUNT_FINISHED = 1000;
 uint32_t currentSenseOffsetSampleCount = 10000;
 float currentSense = 0;
 
-#define SAMPLE_COUNT 1000
+#define SAMPLE_COUNT 2000
 _Bool recordSamples = 0;
 uint32_t time_low[SAMPLE_COUNT];
 uint32_t time_high[SAMPLE_COUNT];
-uint32_t time_vin[2*SAMPLE_COUNT];
+//uint32_t time_vin[2*SAMPLE_COUNT];
 int16_t sample_low[SAMPLE_COUNT];
 int16_t sample_high[SAMPLE_COUNT];
-int16_t sample_vin[2*SAMPLE_COUNT];
+//int16_t sample_vin[2*SAMPLE_COUNT];
 uint32_t sampleIndex_low = 0;
 uint32_t sampleIndex_high = 0;
 uint32_t sampleIndex_vin = 0;
@@ -724,7 +724,10 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 		}
 		*/
 		if (__HAL_ADC_GET_FLAG(hadc, ADC_FLAG_EOC)) {
-			GPIOA->ODR ^= GPIO_PIN_15;
+			//GPIOA->ODR ^= GPIO_PIN_15;
+			if (recordSamples) {
+				GPIOA->BRR = GPIO_PIN_15;
+			}
 
 			if (currentSenseOffsetSampleCount < CURRENT_SENSE_OFFSET_SAMPLE_COUNT_FINISHED) {
 				if ((sampleIndex % 2) == 0) {
@@ -743,12 +746,18 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 						sampleIndex_low++;
 
 						//SetTimerFrequencyWith50pctDutyCycle(100+sampleIndex_low);
-						if (sampleIndex_low % 10 == 0) {
-							float duty = 0.1f;
+						//if (sampleIndex_low % 10 == 0) {
+							/*float duty = 0.1f;
 							float tmp = sampleIndex_low;
 							duty += tmp / 1250.f; // make duty cycle vary from 10% to 90%
-							SetTimerFrequencyAndDutyCycle(5000, duty);
-						}
+							SetTimerFrequencyAndDutyCycle(20000, duty);*/
+
+							float freq = 500.f;
+							float tmp = sampleIndex_low;
+							freq += 5000 * (tmp / (float)SAMPLE_COUNT); // make duty cycle vary from 10% to 90%
+							//SetTimerFrequencyAndDutyCycle(freq, 0.5);
+							SetTimerFrequencyWith50pctDutyCycle(freq);
+						//}
 					}
 				} else {
 					if (sampleIndex_high < SAMPLE_COUNT) {
@@ -764,13 +773,13 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 	}
 	else if (hadc->Instance == ADC2) {
 		if (__HAL_ADC_GET_FLAG(hadc, ADC_FLAG_EOC)) {
-			if (recordSamples) {
+			/*if (recordSamples) {
 				if (sampleIndex_vin < 2*SAMPLE_COUNT) {
 					time_vin[sampleIndex_vin] = HAL_GetHighResTick();
 					sample_vin[sampleIndex_vin] = HAL_ADC_GetValue(hadc);
 					sampleIndex_vin++;
 				}
-			}
+			}*/
 		}
 	}
 }
@@ -780,6 +789,7 @@ void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 {
 	if (htim->Instance == TIM1) {
 		//GPIOA->ODR ^= GPIO_PIN_15;
+		GPIOA->BSRR = GPIO_PIN_15;
 		/*
 		GPIOA->BSRR = GPIO_PIN_15;
 		uint8_t i;
@@ -793,19 +803,32 @@ void SetTimerFrequencyWith50pctDutyCycle(uint32_t freq)
 {
 	const uint32_t PCLK = 170000000;
 	const uint16_t PRESCALER = 32;
-	const float ADC_SAMPLE_TIME_US = 20; // 16 us // See MATLAB script: 'ADC_Configuration.m'
+	const float ADC_SAMPLE_TIME_US = 10; //20; // 16 us // See MATLAB script: 'ADC_Configuration.m'
 
 	uint32_t ARR = (PCLK / (uint32_t)(freq*(PRESCALER+1))) - 1;
 	__HAL_TIM_SET_AUTORELOAD(&htim1, ARR);
 
 	uint16_t END = ARR + 1;
 	uint16_t CENTER = END / 2;
-	uint16_t SampleDuty = (END*freq) / (1000000 / ADC_SAMPLE_TIME_US);
+	uint16_t ADCsampleCnt = (END*freq) / (1000000 / ADC_SAMPLE_TIME_US); // convert ADC sample time (ADC_SAMPLE_TIME_US) to percentage of PWM frequency (freq) and multiply with timer count (END)
 
     //__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, CENTER - SampleDuty); // sample location
     //__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, END - SampleDuty); // sample location
-    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, CENTER/2 - SampleDuty); // sample location
-    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, END - CENTER/2 - SampleDuty); // sample location
+    //__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, CENTER/2 - SampleDuty); // sample location
+    //__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, END - CENTER/2 - SampleDuty); // sample location
+
+    //__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, CENTER - SampleDuty); // sample location
+    //__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, END - SampleDuty); // sample location
+
+	// Put the sample location as close to the end as possible
+	uint16_t sampleLocation1 = CENTER - ADCsampleCnt;
+	uint16_t sampleLocation2 = END - ADCsampleCnt;
+
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, sampleLocation1);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, sampleLocation1);
+
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, sampleLocation2);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, sampleLocation2);
 
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, CENTER);
@@ -815,7 +838,7 @@ void SetTimerFrequencyAndDutyCycle(uint32_t freq, float dutyPct)
 {
 	const uint32_t PCLK = 170000000; // timer PCLK
 	const uint16_t PRESCALER = 32; // timer prescaler (should match configuration above)
-	const float ADC_SAMPLE_TIME_US = 20; // 16 us // See MATLAB script: 'ADC_Configuration.m'
+	const float ADC_SAMPLE_TIME_US = 2;//20; // 16 us // See MATLAB script: 'ADC_Configuration.m'
 
 	uint32_t ARR = (PCLK / (uint32_t)(freq*(PRESCALER+1))) - 1;
 	__HAL_TIM_SET_AUTORELOAD(&htim1, ARR);
@@ -828,8 +851,23 @@ void SetTimerFrequencyAndDutyCycle(uint32_t freq, float dutyPct)
 
     //__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, CENTER - SampleDuty); // sample location
     //__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, END - SampleDuty); // sample location
-    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, CENTER/2 - ADCsampleCnt); // sample location - at the midpoint of the ON-period minus the sample duration
-    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, (END - CENTER) / 2 + CENTER - ADCsampleCnt); // sample location - at the midpoint of the OFF-period minus the sample duration
+	uint16_t sampleLocation1 = 1;
+	uint16_t sampleLocation2 = 0;
+
+	if (ADCsampleCnt < CENTER/2) {
+		sampleLocation1 = CENTER/2 - ADCsampleCnt; // sample location - at the midpoint of the ON-period minus the sample duration
+	} // else sampleLocation1 = 1;
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, sampleLocation1);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, sampleLocation1);
+
+	if (((END - CENTER) / 2 + CENTER - ADCsampleCnt) > (sampleLocation1 + ADCsampleCnt)) {
+		sampleLocation2 = (END - CENTER) / 2 + CENTER - ADCsampleCnt;  // sample location - at the midpoint of the OFF-period minus the sample duration
+	}
+	else if ((END - ADCsampleCnt) > (sampleLocation1 + ADCsampleCnt)) {
+		sampleLocation2 = (END - ADCsampleCnt);
+	} // else sampleLocation2 = 0; // disabled
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, sampleLocation2); // sample location - at the midpoint of the OFF-period minus the sample duration
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, sampleLocation2); // sample location - at the midpoint of the OFF-period minus the sample duration
 
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0); // set one side of the motor to LOW all the time  (necessary to be able to measure current through Shunt1)
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, CENTER); // control the duty cycle with the other side of the motor
@@ -934,12 +972,10 @@ void StartDefaultTask(void const * argument)
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_5);
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_6);
     //__HAL_TIM_ENABLE_IT(&htim1, TIM_IT_UPDATE);
-    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, 340); // sample location
-    __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, 840); // sample location
+    __HAL_TIM_ENABLE_IT(&htim1, TIM_IT_CC2);
+    __HAL_TIM_ENABLE_IT(&htim1, TIM_IT_CC4);
 
-	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
-	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, 0);
-
+#if 0
 	SetTimerFrequencyWith50pctDutyCycle(100);
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, 0);
@@ -952,10 +988,15 @@ void StartDefaultTask(void const * argument)
 
 	currentSenseOffset_uint = currentSenseOffset_uint / currentSenseOffsetSampleCount;
 	currentSenseOffsetSampleCount = CURRENT_SENSE_OFFSET_SAMPLE_COUNT_FINISHED + 1; // marks that offset computation has finished
+#endif
+
 	osDelay(1000); // wait for stabilization
 
+#if 1
 	//SetTimerFrequencyWith50pctDutyCycle(100);
-	SetTimerFrequencyAndDutyCycle(5000, 0.1);
+	//SetTimerFrequencyAndDutyCycle(100, 0.5);
+	SetTimerFrequencyWith50pctDutyCycle(500);
+	osDelay(500); // wait for stabilization
 
 	recordSamples = 1;
 
@@ -963,6 +1004,10 @@ void StartDefaultTask(void const * argument)
 		osDelay(1);
 
 	recordSamples = 0;
+#endif
+
+	//SetTimerFrequencyAndDutyCycle(20000, 0.1);
+	//osDelay(3000);
 
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, 0);
@@ -972,8 +1017,8 @@ void StartDefaultTask(void const * argument)
 	HAL_UART_Transmit(&uart2, sample_low, sizeof(sample_low), 0xFFFF);
 	HAL_UART_Transmit(&uart2, time_high, sizeof(time_high), 0xFFFF);
 	HAL_UART_Transmit(&uart2, sample_high, sizeof(sample_high), 0xFFFF);
-	HAL_UART_Transmit(&uart2, time_vin, sizeof(time_vin), 0xFFFF);
-	HAL_UART_Transmit(&uart2, sample_vin, sizeof(sample_vin), 0xFFFF);
+	//HAL_UART_Transmit(&uart2, time_vin, sizeof(time_vin), 0xFFFF);
+	//HAL_UART_Transmit(&uart2, sample_vin, sizeof(sample_vin), 0xFFFF);
 
 	while (1)
 		osDelay(1);
