@@ -362,9 +362,11 @@ static void MX_ADC2_Init(void)
   {
     Error_Handler();
   }
+
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_1;
+  //sConfig.Channel = ADC_CHANNEL_1; // Vin
+  sConfig.Channel = ADC_CHANNEL_14; // BEMF3
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLETIME_47CYCLES_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
@@ -374,6 +376,8 @@ static void MX_ADC2_Init(void)
   {
     Error_Handler();
   }
+
+
 #if 0
   /** Configure Regular Channel
   */
@@ -763,6 +767,18 @@ uint32_t time_vin;
 int16_t sample_vin;
 uint8_t circular_index = 0;
 
+
+int32_t Encoder_Get();
+#define SAMPLE_BUFFER_SIZE 1000
+uint16_t sample_index = 0;
+uint32_t times[SAMPLE_BUFFER_SIZE];
+int16_t samples_current_sense[SAMPLE_BUFFER_SIZE];
+int32_t samples_encoder[SAMPLE_BUFFER_SIZE];
+//uint32_t times_vin[SAMPLE_BUFFER_SIZE];
+//int16_t samples_vin[SAMPLE_BUFFER_SIZE];
+int16_t samples_bemf[SAMPLE_BUFFER_SIZE];
+
+
 //void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 {
@@ -794,7 +810,14 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 				if ((sampleIndex % 2) == 1) {
 					time_low[circular_index] = HAL_GetHighResTick();
 					sample_low[circular_index] = tmp;
-					circular_index = ++circular_index % 10;
+					//circular_index = ++circular_index % 10;
+
+					/*if (sample_index < SAMPLE_BUFFER_SIZE) {
+						times[sample_index] = HAL_GetHighResTick();
+						samples_current_sense[sample_index] = (sample_low[circular_index] + sample_high[circular_index]) / 2;
+						samples_encoder[sample_index] = Encoder_Get();
+						sample_index++;
+					}*/
 				} else {
 					time_high[circular_index] = HAL_GetHighResTick();
 					sample_high[circular_index] = tmp;
@@ -1019,15 +1042,6 @@ float currentSense_mA = 0;
 float currentSetpoint_mA = 200;
 float PWM = 0;
 
-#define SAMPLE_BUFFER_SIZE 2000
-uint16_t sample_index = 0;
-uint32_t times_low[SAMPLE_BUFFER_SIZE];
-int16_t samples_low[SAMPLE_BUFFER_SIZE];
-uint32_t times_high[SAMPLE_BUFFER_SIZE];
-int16_t samples_high[SAMPLE_BUFFER_SIZE];
-//uint32_t times_vin[SAMPLE_BUFFER_SIZE];
-//int16_t samples_vin[SAMPLE_BUFFER_SIZE];
-
 int32_t EncoderTicks = 0;
 
 /* USER CODE END Header_StartDefaultTask */
@@ -1035,6 +1049,20 @@ void StartDefaultTask(void const * argument)
 {
 
   /* USER CODE BEGIN 5 */
+	GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+	// Disable TIM1 CH3N (set low) to force OUT3 to be toggle between high and floating depending on PWM (instead of toggling between high and low)
+    GPIO_InitStruct.Pin = GPIO_PIN_15;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    HAL_GPIO_WritePin(GPIOB, GPIO_InitStruct.Pin, GPIO_PIN_RESET);
+
+	// Enable Encoder interface
+	HAL_TIM_Encoder_Start(&htim4, TIM_CHANNEL_ALL);
+	__HAL_TIM_ENABLE_IT(&htim4, TIM_IT_UPDATE); // Enable overflow (update) interrupt
+
 	HAL_OPAMP_Start(&hopamp1);
 	HAL_OPAMP_Start(&hopamp2);
 	HAL_OPAMP_Start(&hopamp3);
@@ -1049,10 +1077,6 @@ void StartDefaultTask(void const * argument)
     HAL_ADCEx_Calibration_Start(&hadc2, ADC_SINGLE_ENDED);
     HAL_ADC_Start_IT(&hadc2);
 
-	// Enable Encoder interface
-	HAL_TIM_Encoder_Start(&htim4, TIM_CHANNEL_ALL);
-	__HAL_TIM_ENABLE_IT(&htim4, TIM_IT_UPDATE); // Enable overflow (update) interrupt
-
 	// Start PWM interface
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
     HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_1);
@@ -1063,6 +1087,14 @@ void StartDefaultTask(void const * argument)
     //__HAL_TIM_ENABLE_IT(&htim1, TIM_IT_UPDATE);
     __HAL_TIM_ENABLE_IT(&htim1, TIM_IT_CC2);
     __HAL_TIM_ENABLE_IT(&htim1, TIM_IT_CC4);
+
+    // Enable BEMF sense
+    GPIO_InitStruct.Pin = GPIO_PIN_5;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    HAL_GPIO_WritePin(GPIOB, GPIO_InitStruct.Pin, GPIO_PIN_RESET);
 
 #if 0
 	SetTimerFrequencyWith50pctDutyCycle(100);
@@ -1081,11 +1113,11 @@ void StartDefaultTask(void const * argument)
 
 	osDelay(1000); // wait for stabilization
 
-#if 1
+#if 0
 	//SetTimerFrequencyWith50pctDutyCycle(100);
 	//SetTimerFrequencyAndDutyCycle(100, 0.5);
-	SetTimerFrequencyAndDutyCycle_EndSampling(10000, 0.1);
-	//osDelay(500); // wait for stabilization
+	SetTimerFrequencyAndDutyCycle_EndSampling(10000, 0.8);
+	osDelay(500); // wait for stabilization
 
 	recordSamples = 1;
 
@@ -1095,7 +1127,7 @@ void StartDefaultTask(void const * argument)
 	uint8_t sampleTick = 0;
 	//while ((HAL_GetTick() - currentTime) < 10000) {
 	while (sample_index < SAMPLE_BUFFER_SIZE) {
-		int32_t sense_sum = 0;
+		/*int32_t sense_sum = 0;
 		for (uint8_t i = 0; i < 10; i++) {
 			sense_sum += sample_low[i];
 			sense_sum += sample_high[i];
@@ -1111,16 +1143,44 @@ void StartDefaultTask(void const * argument)
 		SetTimerFrequencyAndDutyCycle_MiddleSampling(10000, duty);
 
 		if ((++sampleTick % 5) == 0) {
-			samples_low[sample_index] = current_sense;
-			times_low[sample_index] = HAL_GetHighResTick();
-			samples_high[sample_index] = current_sense;
-			times_high[sample_index] = HAL_GetHighResTick();
+			times[sample_index] = HAL_GetHighResTick();
+			samples_current_sense[sample_index] = current_sense;
+			samples_encoder[sample_index] = Encoder_Get();
 			sample_index++;
 		}
 
-		EncoderTicks = Encoder_Get();
+		EncoderTicks = Encoder_Get();*/
 
 		osDelay(1);
+	}
+
+	recordSamples = 0;
+#endif
+
+
+#if 1
+	SetTimerFrequencyAndDutyCycle_EndSampling(500, 0.8);
+	osDelay(1000); // wait for stabilization
+
+	SetTimerFrequencyAndDutyCycle_EndSampling(500, 0.5);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, 0);
+
+	recordSamples = 1;
+
+	uint32_t currentTime = HAL_GetTick();
+	while (sample_index < SAMPLE_BUFFER_SIZE)
+	{
+		times[sample_index] = HAL_GetHighResTick();
+		samples_bemf[sample_index] = sample_vin;
+		samples_encoder[sample_index] = Encoder_Get();
+		sample_index++;
+
+		if (sample_index > 100 && sample_vin < 700) {
+			HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_SET);
+		}
+
+		osDelay(2);
 	}
 
 	recordSamples = 0;
@@ -1132,11 +1192,14 @@ void StartDefaultTask(void const * argument)
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, 0);
 
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, 0);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, 0);
 
-	HAL_UART_Transmit(&uart2, times_low, sizeof(times_low), 0xFFFF);
-	HAL_UART_Transmit(&uart2, samples_low, sizeof(samples_low), 0xFFFF);
-	HAL_UART_Transmit(&uart2, times_high, sizeof(times_high), 0xFFFF);
-	HAL_UART_Transmit(&uart2, samples_high, sizeof(samples_high), 0xFFFF);
+	HAL_UART_Transmit(&uart2, times, sizeof(times), 0xFFFF);
+	HAL_UART_Transmit(&uart2, samples_bemf, sizeof(samples_current_sense), 0xFFFF);
+	HAL_UART_Transmit(&uart2, samples_encoder, sizeof(samples_encoder), 0xFFFF);
+	//HAL_UART_Transmit(&uart2, times_high, sizeof(times_high), 0xFFFF);
+	//HAL_UART_Transmit(&uart2, samples_high, sizeof(samples_high), 0xFFFF);
 	//HAL_UART_Transmit(&uart2, time_vin, sizeof(time_vin), 0xFFFF);
 	//HAL_UART_Transmit(&uart2, sample_vin, sizeof(sample_vin), 0xFFFF);
 
