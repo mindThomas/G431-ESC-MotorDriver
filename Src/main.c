@@ -51,6 +51,7 @@ OPAMP_HandleTypeDef hopamp2;
 OPAMP_HandleTypeDef hopamp3;
 
 TIM_HandleTypeDef htim1;
+TIM_HandleTypeDef htim4;
 
 UART_HandleTypeDef uart2;
 
@@ -69,6 +70,7 @@ static void MX_OPAMP2_Init(void);
 static void MX_OPAMP3_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_UART2_Init(void);
+static void MX_TIM4_Init(void);
 void StartDefaultTask(void const * argument);
 
 /* USER CODE BEGIN PFP */
@@ -118,6 +120,7 @@ int main(void)
   MX_OPAMP3_Init();
   MX_TIM1_Init();
   MX_UART2_Init();
+  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -606,6 +609,55 @@ static void MX_TIM1_Init(void)
 }
 
 /**
+  * @brief TIM4 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM4_Init(void)
+{
+
+  /* USER CODE BEGIN TIM4_Init 0 */
+
+  /* USER CODE END TIM4_Init 0 */
+
+  TIM_Encoder_InitTypeDef sConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM4_Init 1 */
+
+  /* USER CODE END TIM4_Init 1 */
+  htim4.Instance = TIM4;
+  htim4.Init.Prescaler = 0;
+  htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim4.Init.Period = 0xFFFF; // 16-bit timers
+  htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  sConfig.EncoderMode = TIM_ENCODERMODE_TI12;
+  sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
+  sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
+  sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
+  sConfig.IC1Filter = 0;
+  sConfig.IC2Polarity = TIM_ICPOLARITY_RISING;
+  sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
+  sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
+  sConfig.IC2Filter = 0;
+  if (HAL_TIM_Encoder_Init(&htim4, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim4, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM4_Init 2 */
+
+  /* USER CODE END TIM4_Init 2 */
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -947,6 +999,13 @@ void setPWM(int16_t duty)
 
 	//__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, 100);
 }
+
+int32_t EncoderOffset = -(0x10000); // a single interrupt will be fired the first time the encoder is enabled - this initial offset is thus to compensate for that
+int32_t Encoder_Get()
+{
+	//return -( (uint16_t)__HAL_TIM_GET_COUNTER(&_hRes->handle) + _hRes->offsetValue); // invert direction
+	return (uint16_t)__HAL_TIM_GET_COUNTER(&htim4) + EncoderOffset;
+}
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -969,6 +1028,8 @@ int16_t samples_high[SAMPLE_BUFFER_SIZE];
 //uint32_t times_vin[SAMPLE_BUFFER_SIZE];
 //int16_t samples_vin[SAMPLE_BUFFER_SIZE];
 
+int32_t EncoderTicks = 0;
+
 /* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void const * argument)
 {
@@ -988,6 +1049,11 @@ void StartDefaultTask(void const * argument)
     HAL_ADCEx_Calibration_Start(&hadc2, ADC_SINGLE_ENDED);
     HAL_ADC_Start_IT(&hadc2);
 
+	// Enable Encoder interface
+	HAL_TIM_Encoder_Start(&htim4, TIM_CHANNEL_ALL);
+	__HAL_TIM_ENABLE_IT(&htim4, TIM_IT_UPDATE); // Enable overflow (update) interrupt
+
+	// Start PWM interface
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
     HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_1);
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
@@ -1051,6 +1117,8 @@ void StartDefaultTask(void const * argument)
 			times_high[sample_index] = HAL_GetHighResTick();
 			sample_index++;
 		}
+
+		EncoderTicks = Encoder_Get();
 
 		osDelay(1);
 	}
@@ -1116,6 +1184,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	  sampleIndex = 0;
 	  //GPIOA->BRR = GPIO_PIN_15;
 	  //ADC_Sample_Processing();
+  }
+  else if (htim->Instance == TIM4) {
+	// Encoder overflow detected
+	if (__HAL_TIM_IS_TIM_COUNTING_DOWN(&htim4)) // encoder is turning negative
+		EncoderOffset -= 0x10000;
+	else // encoder is turning positive
+		EncoderOffset += 0x10000;
   }
   /* USER CODE END Callback 1 */
 }
