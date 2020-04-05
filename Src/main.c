@@ -77,11 +77,24 @@ void StartDefaultTask(void const * argument);
 void SetTimerFrequencyWith50pctDutyCycle(uint32_t freq);
 void SetTimerFrequencyAndDutyCycle_MiddleSampling(uint32_t freq, float dutyPct);
 void SetTimerFrequencyAndDutyCycle_EndSampling(uint32_t freq, float dutyPct);
+void TIM_CCxNChannelCmd(TIM_TypeDef *TIMx, uint32_t Channel, uint32_t ChannelNState);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+// Copied from stm32fg4xx_hal_tim_ex.c
+void TIM_CCxNChannelCmd(TIM_TypeDef *TIMx, uint32_t Channel, uint32_t ChannelNState)
+{
+  uint32_t tmp;
 
+  tmp = TIM_CCER_CC1NE << (Channel & 0x1FU); /* 0x1FU = 31 bits max shift */
+
+  /* Reset the CCxNE Bit */
+  TIMx->CCER &=  ~tmp;
+
+  /* Set or reset the CCxNE Bit */
+  TIMx->CCER |= (uint32_t)(ChannelNState << (Channel & 0x1FU)); /* 0x1FU = 31 bits max shift */
+}
 /* USER CODE END 0 */
 
 /**
@@ -560,6 +573,9 @@ static void MX_TIM1_Init(void)
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
+
+  sConfigOC.OCNPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCNIdleState = TIM_OCIDLESTATE_RESET;
   if (HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
   {
     Error_Handler();
@@ -1052,12 +1068,12 @@ void StartDefaultTask(void const * argument)
 	GPIO_InitTypeDef GPIO_InitStruct = {0};
 
 	// Disable TIM1 CH3N (set low) to force OUT3 to be toggle between high and floating depending on PWM (instead of toggling between high and low)
-    GPIO_InitStruct.Pin = GPIO_PIN_15;
+    /*GPIO_InitStruct.Pin = GPIO_PIN_15;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-    HAL_GPIO_WritePin(GPIOB, GPIO_InitStruct.Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOB, GPIO_InitStruct.Pin, GPIO_PIN_RESET);*/
 
 	// Enable Encoder interface
 	HAL_TIM_Encoder_Start(&htim4, TIM_CHANNEL_ALL);
@@ -1087,6 +1103,9 @@ void StartDefaultTask(void const * argument)
     //__HAL_TIM_ENABLE_IT(&htim1, TIM_IT_UPDATE);
     __HAL_TIM_ENABLE_IT(&htim1, TIM_IT_CC2);
     __HAL_TIM_ENABLE_IT(&htim1, TIM_IT_CC4);
+
+    // Disable TIM1 CH3N (set low) to force OUT3 to be toggle between high and floating depending on PWM (instead of toggling between high and low)
+    //TIM_CCxNChannelCmd(htim1.Instance, TIM_CHANNEL_3, TIM_CCxN_DISABLE);
 
     // Enable BEMF sense
     GPIO_InitStruct.Pin = GPIO_PIN_5;
@@ -1165,6 +1184,9 @@ void StartDefaultTask(void const * argument)
 	SetTimerFrequencyAndDutyCycle_EndSampling(500, 0.5);
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, 0);
+
+    // Disable TIM1 CH3N (set low) to force OUT3 to be toggle between high and floating depending on PWM (instead of toggling between high and low)
+    TIM_CCxNChannelCmd(htim1.Instance, TIM_CHANNEL_3, TIM_CCxN_DISABLE);
 
 	recordSamples = 1;
 
