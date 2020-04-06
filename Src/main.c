@@ -788,8 +788,8 @@ int16_t samples_high[SAMPLE_BUFFER_SIZE];
 uint32_t time_vin;
 int16_t sample_vin;
 
-uint32_t freq = 100;
-float duty = 0.5;
+uint32_t freq = 1000;
+float duty = 0.9;
 
 //void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
@@ -831,7 +831,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 
 				sample_index++;
 				if (sample_index == SAMPLE_BUFFER_SIZE) {
-					SetTimerFrequencyAndDutyCycle_MiddleSampling(freq, duty);
+					TIM_CCxNChannelCmd(htim1.Instance, TIM_CHANNEL_3, TIM_CCxN_DISABLE); // Enable Coast mode
 				}
 			}
 
@@ -1209,6 +1209,7 @@ void StartDefaultTask(void const * argument)
 #endif
 
 	osDelay(1000); // wait for stabilization
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_SET);
 
 #if 0
 	//SetTimerFrequencyWith50pctDutyCycle(100);
@@ -1371,6 +1372,8 @@ void StartDefaultTask(void const * argument)
 	HAL_UART_Transmit(&uart2, samples_high, sizeof(samples_high), 0xFFFF);
 	//HAL_UART_Transmit(&uart2, time_vin, sizeof(time_vin), 0xFFFF);
 	//HAL_UART_Transmit(&uart2, sample_vin, sizeof(sample_vin), 0xFFFF);
+
+	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
 
 	while (1)
 		osDelay(1);
