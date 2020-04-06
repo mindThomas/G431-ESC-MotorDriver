@@ -25,6 +25,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "FirstOrderLPF.h"
+#include <math.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -77,6 +78,7 @@ void StartDefaultTask(void const * argument);
 void SetTimerFrequencyWith50pctDutyCycle(uint32_t freq);
 void SetTimerFrequencyAndDutyCycle_MiddleSampling(uint32_t freq, float dutyPct);
 void SetTimerFrequencyAndDutyCycle_EndSampling(uint32_t freq, float dutyPct);
+void SetTimerFrequencyAndDutyCycle_MiddleSamplingOnce(uint32_t freq, float dutyPct);
 void TIM_CCxNChannelCmd(TIM_TypeDef *TIMx, uint32_t Channel, uint32_t ChannelNState);
 /* USER CODE END PFP */
 
@@ -562,7 +564,7 @@ static void MX_TIM1_Init(void)
     Error_Handler();
   }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
-  sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_OC5REF_RISING_OC6REF_RISING;
+  sMasterConfig.MasterOutputTrigger2 = TIM_TRGO2_OC5REF_RISING_OC6REF_RISING; //TIM_TRGO2_OC5REF_RISING_OC6REF_RISING;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
   {
@@ -775,24 +777,28 @@ float currentSense = 0;
 
 _Bool recordSamples = 0;
 
-uint32_t time_low[10];
+uint32_t time_middle[100];
+int16_t sample_middle[100];
+int32_t encoder_middle[100];
+
+/*uint32_t time_low[10];
 int16_t sample_low[10];
 uint32_t time_high[10];
-int16_t sample_high[10];
+int16_t sample_high[10];*/
 uint32_t time_vin;
 int16_t sample_vin;
 uint8_t circular_index = 0;
 
 
 int32_t Encoder_Get();
-#define SAMPLE_BUFFER_SIZE 1000
+#define SAMPLE_BUFFER_SIZE 2400
 uint16_t sample_index = 0;
 uint32_t times[SAMPLE_BUFFER_SIZE];
 int16_t samples_current_sense[SAMPLE_BUFFER_SIZE];
 int32_t samples_encoder[SAMPLE_BUFFER_SIZE];
 //uint32_t times_vin[SAMPLE_BUFFER_SIZE];
 //int16_t samples_vin[SAMPLE_BUFFER_SIZE];
-int16_t samples_bemf[SAMPLE_BUFFER_SIZE];
+//int16_t samples_bemf[SAMPLE_BUFFER_SIZE];
 
 
 //void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
@@ -823,10 +829,11 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 				//int32_t tmp = (int32_t)HAL_ADC_GetValue(hadc) - (int32_t)currentSenseOffset_uint;
 				int32_t tmp = (int32_t)HAL_ADC_GetValue(hadc);
 				//int32_t tmp = __LL_ADC_CALC_VREFANALOG_VOLTAGE((int32_t)HAL_ADC_GetValue(hadc), LL_ADC_RESOLUTION_12B); // for Vref reading conversion
-				if ((sampleIndex % 2) == 1) {
-					time_low[circular_index] = HAL_GetHighResTick();
-					sample_low[circular_index] = tmp;
-					//circular_index = ++circular_index % 10;
+				//if ((sampleIndex % 2) == 1) {
+					time_middle[circular_index] = HAL_GetHighResTick();
+					sample_middle[circular_index] = tmp;
+					encoder_middle[circular_index] = Encoder_Get();
+					circular_index = ++circular_index % 100;
 
 					/*if (sample_index < SAMPLE_BUFFER_SIZE) {
 						times[sample_index] = HAL_GetHighResTick();
@@ -834,10 +841,10 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 						samples_encoder[sample_index] = Encoder_Get();
 						sample_index++;
 					}*/
-				} else {
+				/*} else {
 					time_high[circular_index] = HAL_GetHighResTick();
 					sample_high[circular_index] = tmp;
-				}
+				}*/
 			}
 
 			sampleIndex++;
@@ -914,7 +921,7 @@ void SetTimerFrequencyAndDutyCycle_MiddleSampling(uint32_t freq, float dutyPct)
 
 	if (dutyPct > 1) dutyPct = 1.0;
 
-	uint16_t END = ARR + 1;
+	uint16_t END = ARR - 1; // minus one to fix problem with 100% duty cycle issue (should have been +1)
 	uint16_t CENTER = END * dutyPct;
 	uint16_t ADCsampleCnt = (END*freq) / (1000000 / ADC_SAMPLE_TIME_US); // convert ADC sample time (ADC_SAMPLE_TIME_US) to percentage of PWM frequency (freq) and multiply with timer count (END)
 
@@ -951,9 +958,13 @@ void SetTimerFrequencyAndDutyCycle_EndSampling(uint32_t freq, float dutyPct)
 	uint32_t ARR = (PCLK / (uint32_t)(freq*(PRESCALER+1))) - 1;
 	__HAL_TIM_SET_AUTORELOAD(&htim1, ARR);
 
-	uint16_t END = ARR + 1;
+	if (dutyPct > 1) dutyPct = 1.0;
+
+	uint16_t END = ARR - 1; // minus one to fix problem with 100% duty cycle issue (should have been +1)
 	uint16_t CENTER = END * dutyPct;
 	uint16_t ADCsampleCnt = (END*freq) / (1000000 / ADC_SAMPLE_TIME_US); // convert ADC sample time (ADC_SAMPLE_TIME_US) to percentage of PWM frequency (freq) and multiply with timer count (END)
+
+	//(CCRx / (ARR + 1)) = dutyPct
 
     //__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, CENTER - SampleDuty); // sample location
     //__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, END - SampleDuty); // sample location
@@ -964,8 +975,15 @@ void SetTimerFrequencyAndDutyCycle_EndSampling(uint32_t freq, float dutyPct)
     //__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, END - SampleDuty); // sample location
 
 	// Put the sample location as close to the end as possible
-	uint16_t sampleLocation1 = CENTER - ADCsampleCnt;
-	uint16_t sampleLocation2 = END - ADCsampleCnt;
+	uint16_t sampleLocation1 = 1;
+	uint16_t sampleLocation2 = 0;
+
+	if (CENTER > ADCsampleCnt) {
+		sampleLocation1 = CENTER - ADCsampleCnt;
+	}
+	if (END > ADCsampleCnt) {
+		sampleLocation2 = END - ADCsampleCnt;
+	}
 
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, sampleLocation1);
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, sampleLocation1);
@@ -975,6 +993,40 @@ void SetTimerFrequencyAndDutyCycle_EndSampling(uint32_t freq, float dutyPct)
 
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, CENTER);
+}
+
+void SetTimerFrequencyAndDutyCycle_MiddleSamplingOnce(uint32_t freq, float dutyPct)
+{
+	const uint32_t PCLK = 170000000; // timer PCLK
+	const uint16_t PRESCALER = 32; // timer prescaler (should match configuration above)
+	const float ADC_SAMPLE_TIME_US = 5; //20; // 16 us // See MATLAB script: 'ADC_Configuration.m'
+
+	uint32_t ARR = (PCLK / (uint32_t)(freq*(PRESCALER+1))) - 1;
+	__HAL_TIM_SET_AUTORELOAD(&htim1, ARR);
+
+	if (dutyPct > 1) dutyPct = 1.0;
+
+	uint16_t END = ARR - 1; // minus one to fix problem with 100% duty cycle issue (should have been +1)
+	uint16_t CENTER = END * dutyPct;
+	uint16_t ADCsampleCnt = (END*freq) / (1000000 / ADC_SAMPLE_TIME_US); // convert ADC sample time (ADC_SAMPLE_TIME_US) to percentage of PWM frequency (freq) and multiply with timer count (END)
+
+	uint16_t sampleLocation = 1;
+
+	if (dutyPct > 0.5) {
+		sampleLocation = CENTER/2 - ADCsampleCnt; // sample location - at the midpoint of the ON-period minus the sample duration
+	} else {
+		sampleLocation = (END - CENTER) / 2 + CENTER - ADCsampleCnt;  // sample location - at the midpoint of the OFF-period minus the sample duration
+	}
+
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, sampleLocation);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, sampleLocation);
+
+	// Only sample once
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, 0);
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, 0);
+
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0); // set one side of the motor to LOW all the time  (necessary to be able to measure current through Shunt1)
+	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, CENTER); // control the duty cycle with the other side of the motor
 }
 
 FirstOrderLPF currentSenseLPF;
@@ -1045,6 +1097,43 @@ int32_t Encoder_Get()
 	//return -( (uint16_t)__HAL_TIM_GET_COUNTER(&_hRes->handle) + _hRes->offsetValue); // invert direction
 	return (uint16_t)__HAL_TIM_GET_COUNTER(&htim4) + EncoderOffset;
 }
+
+void SetMaxDuty(void)
+{
+	GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    /**TIM1 GPIO Configuration
+    PC13     ------> TIM1_CH1N
+    PB15     ------> TIM1_CH3N
+    PA8     ------> TIM1_CH1
+    PA10     ------> TIM1_CH3
+    */
+    GPIO_InitStruct.Pin = GPIO_PIN_13;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Alternate = GPIO_AF4_TIM1;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = GPIO_PIN_15;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Alternate = GPIO_AF4_TIM1;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = GPIO_PIN_8|GPIO_PIN_10;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Alternate = GPIO_AF6_TIM1;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET);  // TIM1_CH1
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET); // TIM1_CH1N
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_SET);  // TIM1_CH3
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, GPIO_PIN_RESET); // TIM1_CH3N
+}
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -1099,10 +1188,11 @@ void StartDefaultTask(void const * argument)
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
     HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_3);
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_5);
-    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_6);
+    //HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_6);
     //__HAL_TIM_ENABLE_IT(&htim1, TIM_IT_UPDATE);
-    __HAL_TIM_ENABLE_IT(&htim1, TIM_IT_CC2);
-    __HAL_TIM_ENABLE_IT(&htim1, TIM_IT_CC4);
+
+    HAL_TIM_PWM_Start_IT(&htim1, TIM_CHANNEL_2); // __HAL_TIM_ENABLE_IT(&htim1, TIM_IT_CC2);
+    //HAL_TIM_PWM_Start_IT(&htim1, TIM_CHANNEL_4); // __HAL_TIM_ENABLE_IT(&htim1, TIM_IT_CC4);
 
     // Disable TIM1 CH3N (set low) to force OUT3 to be toggle between high and floating depending on PWM (instead of toggling between high and low)
     //TIM_CCxNChannelCmd(htim1.Instance, TIM_CHANNEL_3, TIM_CCxN_DISABLE);
@@ -1177,7 +1267,7 @@ void StartDefaultTask(void const * argument)
 #endif
 
 
-#if 1
+#if 0
 	SetTimerFrequencyAndDutyCycle_EndSampling(500, 0.8);
 	osDelay(1000); // wait for stabilization
 
@@ -1208,17 +1298,73 @@ void StartDefaultTask(void const * argument)
 	recordSamples = 0;
 #endif
 
+#if 0
+	SetTimerFrequencyAndDutyCycle_MiddleSamplingOnce(10000, 0);
+	osDelay(500);
+
+	recordSamples = 1;
+
+	uint32_t currentTime = HAL_GetTick();
+	while (sample_index < SAMPLE_BUFFER_SIZE)
+	{
+		int32_t sense_sum = 0;
+		for (uint8_t i = 0; i < 10; i++) {
+			sense_sum += sample_low[i];
+			//sense_sum += sample_high[i];
+		}
+
+		volatile int16_t current_sense = sense_sum / 20;
+
+		times[sample_index] = HAL_GetHighResTick();
+		samples_current_sense[sample_index] = current_sense;
+		samples_encoder[sample_index] = Encoder_Get();
+		sample_index++;
+
+		if ((sample_index % 200) == 0) {
+			SetTimerFrequencyAndDutyCycle_MiddleSamplingOnce(10000, (float)sample_index / 2000.f);
+			osDelay(500);
+		}
+
+		osDelay(1);
+	}
+
+	recordSamples = 0;
+#endif
+
+#if 1
+	SetTimerFrequencyAndDutyCycle_MiddleSamplingOnce(10000, 0);
+	recordSamples = 1;
+
+	uint32_t currentTime = HAL_GetTick();
+	while (sample_index < SAMPLE_BUFFER_SIZE)
+	{
+		SetTimerFrequencyAndDutyCycle_MiddleSamplingOnce(10000, (float)sample_index / 2300.f);
+		osDelay(500);
+
+		for (uint8_t i = 0; i < 100; i++) {
+			times[sample_index] = time_middle[i];
+			samples_current_sense[sample_index] = sample_middle[i];
+			samples_encoder[sample_index] = encoder_middle[i];
+			sample_index++;
+		}
+	}
+
+	recordSamples = 0;
+#endif
+
 	//SetTimerFrequencyAndDutyCycle(20000, 0.1);
 	//osDelay(3000);
 
+	// Disable motor and change to coast mode
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, 0);
+	TIM_CCxNChannelCmd(htim1.Instance, TIM_CHANNEL_3, TIM_CCxN_DISABLE);
 
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, 0);
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, 0);
 
 	HAL_UART_Transmit(&uart2, times, sizeof(times), 0xFFFF);
-	HAL_UART_Transmit(&uart2, samples_bemf, sizeof(samples_current_sense), 0xFFFF);
+	HAL_UART_Transmit(&uart2, samples_current_sense, sizeof(samples_current_sense), 0xFFFF);
 	HAL_UART_Transmit(&uart2, samples_encoder, sizeof(samples_encoder), 0xFFFF);
 	//HAL_UART_Transmit(&uart2, times_high, sizeof(times_high), 0xFFFF);
 	//HAL_UART_Transmit(&uart2, samples_high, sizeof(samples_high), 0xFFFF);
