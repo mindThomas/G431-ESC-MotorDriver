@@ -777,29 +777,19 @@ float currentSense = 0;
 
 _Bool recordSamples = 0;
 
-uint32_t time_middle[100];
-int16_t sample_middle[100];
-int32_t encoder_middle[100];
+int32_t Encoder_Get();
+#define SAMPLE_BUFFER_SIZE 2000
+uint16_t sample_index = 0;
+uint32_t times_low[SAMPLE_BUFFER_SIZE];
+uint32_t times_high[SAMPLE_BUFFER_SIZE];
+int16_t samples_low[SAMPLE_BUFFER_SIZE];
+int16_t samples_high[SAMPLE_BUFFER_SIZE];
 
-/*uint32_t time_low[10];
-int16_t sample_low[10];
-uint32_t time_high[10];
-int16_t sample_high[10];*/
 uint32_t time_vin;
 int16_t sample_vin;
-uint8_t circular_index = 0;
 
-
-int32_t Encoder_Get();
-#define SAMPLE_BUFFER_SIZE 2400
-uint16_t sample_index = 0;
-uint32_t times[SAMPLE_BUFFER_SIZE];
-int16_t samples_current_sense[SAMPLE_BUFFER_SIZE];
-int32_t samples_encoder[SAMPLE_BUFFER_SIZE];
-//uint32_t times_vin[SAMPLE_BUFFER_SIZE];
-//int16_t samples_vin[SAMPLE_BUFFER_SIZE];
-//int16_t samples_bemf[SAMPLE_BUFFER_SIZE];
-
+uint32_t freq = 100;
+float duty = 0.5;
 
 //void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
@@ -829,22 +819,20 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 				//int32_t tmp = (int32_t)HAL_ADC_GetValue(hadc) - (int32_t)currentSenseOffset_uint;
 				int32_t tmp = (int32_t)HAL_ADC_GetValue(hadc);
 				//int32_t tmp = __LL_ADC_CALC_VREFANALOG_VOLTAGE((int32_t)HAL_ADC_GetValue(hadc), LL_ADC_RESOLUTION_12B); // for Vref reading conversion
-				//if ((sampleIndex % 2) == 1) {
-					time_middle[circular_index] = HAL_GetHighResTick();
-					sample_middle[circular_index] = tmp;
-					encoder_middle[circular_index] = Encoder_Get();
-					circular_index = ++circular_index % 100;
+				if (sample_index < 2*SAMPLE_BUFFER_SIZE) {
+					if ((sampleIndex % 2) == 1) {
+						times_low[(sample_index / 2)] = HAL_GetHighResTick();
+						samples_low[(sample_index / 2)] = tmp;
+					} else {
+						times_high[(sample_index / 2)] = HAL_GetHighResTick();
+						samples_high[(sample_index / 2)] = tmp;
+					}
+				}
 
-					/*if (sample_index < SAMPLE_BUFFER_SIZE) {
-						times[sample_index] = HAL_GetHighResTick();
-						samples_current_sense[sample_index] = (sample_low[circular_index] + sample_high[circular_index]) / 2;
-						samples_encoder[sample_index] = Encoder_Get();
-						sample_index++;
-					}*/
-				/*} else {
-					time_high[circular_index] = HAL_GetHighResTick();
-					sample_high[circular_index] = tmp;
-				}*/
+				sample_index++;
+				if (sample_index == SAMPLE_BUFFER_SIZE) {
+					SetTimerFrequencyAndDutyCycle_MiddleSampling(freq, duty);
+				}
 			}
 
 			sampleIndex++;
@@ -1188,11 +1176,11 @@ void StartDefaultTask(void const * argument)
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
     HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_3);
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_5);
-    //HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_6);
+    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_6);
     //__HAL_TIM_ENABLE_IT(&htim1, TIM_IT_UPDATE);
 
     HAL_TIM_PWM_Start_IT(&htim1, TIM_CHANNEL_2); // __HAL_TIM_ENABLE_IT(&htim1, TIM_IT_CC2);
-    //HAL_TIM_PWM_Start_IT(&htim1, TIM_CHANNEL_4); // __HAL_TIM_ENABLE_IT(&htim1, TIM_IT_CC4);
+    HAL_TIM_PWM_Start_IT(&htim1, TIM_CHANNEL_4); // __HAL_TIM_ENABLE_IT(&htim1, TIM_IT_CC4);
 
     // Disable TIM1 CH3N (set low) to force OUT3 to be toggle between high and floating depending on PWM (instead of toggling between high and low)
     //TIM_CCxNChannelCmd(htim1.Instance, TIM_CHANNEL_3, TIM_CCxN_DISABLE);
@@ -1331,7 +1319,7 @@ void StartDefaultTask(void const * argument)
 	recordSamples = 0;
 #endif
 
-#if 1
+#if 0
 	SetTimerFrequencyAndDutyCycle_MiddleSamplingOnce(10000, 0);
 	recordSamples = 1;
 
@@ -1352,6 +1340,20 @@ void StartDefaultTask(void const * argument)
 	recordSamples = 0;
 #endif
 
+#if 1
+	SetTimerFrequencyAndDutyCycle_EndSampling(freq, duty);
+	osDelay(1000);
+	recordSamples = 1;
+
+	uint32_t currentTime = HAL_GetTick();
+	while (sample_index < 2*SAMPLE_BUFFER_SIZE)
+	{
+		osDelay(1);
+	}
+
+	recordSamples = 0;
+#endif
+
 	//SetTimerFrequencyAndDutyCycle(20000, 0.1);
 	//osDelay(3000);
 
@@ -1363,11 +1365,10 @@ void StartDefaultTask(void const * argument)
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, 0);
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, 0);
 
-	HAL_UART_Transmit(&uart2, times, sizeof(times), 0xFFFF);
-	HAL_UART_Transmit(&uart2, samples_current_sense, sizeof(samples_current_sense), 0xFFFF);
-	HAL_UART_Transmit(&uart2, samples_encoder, sizeof(samples_encoder), 0xFFFF);
-	//HAL_UART_Transmit(&uart2, times_high, sizeof(times_high), 0xFFFF);
-	//HAL_UART_Transmit(&uart2, samples_high, sizeof(samples_high), 0xFFFF);
+	HAL_UART_Transmit(&uart2, times_low, sizeof(times_low), 0xFFFF);
+	HAL_UART_Transmit(&uart2, samples_low, sizeof(samples_low), 0xFFFF);
+	HAL_UART_Transmit(&uart2, times_high, sizeof(times_high), 0xFFFF);
+	HAL_UART_Transmit(&uart2, samples_high, sizeof(samples_high), 0xFFFF);
 	//HAL_UART_Transmit(&uart2, time_vin, sizeof(time_vin), 0xFFFF);
 	//HAL_UART_Transmit(&uart2, sample_vin, sizeof(sample_vin), 0xFFFF);
 
