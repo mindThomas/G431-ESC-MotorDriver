@@ -46,6 +46,7 @@
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
 ADC_HandleTypeDef hadc2;
+DMA_HandleTypeDef hdma_adc1;
 
 OPAMP_HandleTypeDef hopamp1;
 OPAMP_HandleTypeDef hopamp2;
@@ -64,6 +65,7 @@ osThreadId defaultTaskHandle;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_ADC2_Init(void);
 static void MX_OPAMP1_Init(void);
@@ -128,6 +130,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_ADC1_Init();
   MX_ADC2_Init();
   MX_OPAMP1_Init();
@@ -276,7 +279,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConv = ADC_EXTERNALTRIG_T1_TRGO2;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
-  hadc1.Init.DMAContinuousRequests = DISABLE;
+  hadc1.Init.DMAContinuousRequests = ENABLE;
   hadc1.Init.Overrun = ADC_OVR_DATA_PRESERVED;
   hadc1.Init.OversamplingMode = DISABLE;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
@@ -679,6 +682,24 @@ static void MX_TIM4_Init(void)
 
 }
 
+
+/** 
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void) 
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMAMUX1_CLK_ENABLE();
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Channel1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+
+}
+
 /**
   * @brief GPIO Initialization Function
   * @param None
@@ -788,8 +809,8 @@ int16_t samples_high[SAMPLE_BUFFER_SIZE];
 uint32_t time_vin;
 int16_t sample_vin;
 
-uint32_t freq = 1000;
-float duty = 0.9;
+uint32_t freq = 500;
+float duty = 0.5;
 
 //void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef *hadc)
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
@@ -803,7 +824,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 			GPIOA->ODR ^= GPIO_PIN_15;
 		}
 		*/
-		if (__HAL_ADC_GET_FLAG(hadc, ADC_FLAG_EOC)) {
+		//if (__HAL_ADC_GET_FLAG(hadc, ADC_FLAG_EOC)) {
 			//GPIOA->ODR ^= GPIO_PIN_15;
 			if (recordSamples) {
 				GPIOA->BRR = GPIO_PIN_15;
@@ -836,7 +857,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 			}
 
 			sampleIndex++;
-		}
+		//}
 	}
 	else if (hadc->Instance == ADC2) {
 		if (__HAL_ADC_GET_FLAG(hadc, ADC_FLAG_EOC)) {
@@ -1137,6 +1158,8 @@ float PWM = 0;
 
 int32_t EncoderTicks = 0;
 
+__IO uint16_t ADC_DMA_Samples[100];
+
 /* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void const * argument)
 {
@@ -1164,8 +1187,9 @@ void StartDefaultTask(void const * argument)
 
     HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
     //HAL_ADCEx_InjectedStart_IT(&hadc1);
-    HAL_ADC_Start_IT(&hadc1);
+    //HAL_ADC_Start_IT(&hadc1);
     //__HAL_ADC_ENABLE_IT(&hadc1, ADC_IT_EOS);
+    HAL_ADC_Start_DMA(&hadc1, (uint32_t*)&ADC_DMA_Samples, sizeof(ADC_DMA_Samples)/sizeof(ADC_DMA_Samples[0]));
 
     HAL_ADCEx_Calibration_Start(&hadc2, ADC_SINGLE_ENDED);
     HAL_ADC_Start_IT(&hadc2);
@@ -1342,6 +1366,7 @@ void StartDefaultTask(void const * argument)
 #endif
 
 #if 1
+	//TIM_CCxNChannelCmd(htim1.Instance, TIM_CHANNEL_3, TIM_CCxN_DISABLE); // Enable Coast mode
 	SetTimerFrequencyAndDutyCycle_EndSampling(freq, duty);
 	osDelay(1000);
 	recordSamples = 1;
