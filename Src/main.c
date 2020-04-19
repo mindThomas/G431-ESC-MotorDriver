@@ -551,7 +551,7 @@ static void MX_TIM1_Init(void)
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP; //TIM_COUNTERMODE_CENTERALIGNED1;
   htim1.Init.Period = 999;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim1.Init.RepetitionCounter = 0;
+  htim1.Init.RepetitionCounter = 49;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
   {
@@ -695,7 +695,7 @@ static void MX_DMA_Init(void)
 
   /* DMA interrupt init */
   /* DMA1_Channel1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 5, 0);
+  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 3, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
 
 }
@@ -797,6 +797,7 @@ uint32_t currentSenseOffsetSampleCount = 10000;
 float currentSense = 0;
 
 _Bool recordSamples = 0;
+_Bool DMA_Transfer_Ongoing = 0;
 
 int32_t Encoder_Get();
 #define SAMPLE_BUFFER_SIZE 2000
@@ -825,6 +826,9 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 		}
 		*/
 		//if (__HAL_ADC_GET_FLAG(hadc, ADC_FLAG_EOC)) {
+			DMA_Transfer_Ongoing = 0;
+			/*TIM_CCxChannelCmd(htim1.Instance, TIM_CHANNEL_5, TIM_CCx_DISABLE);
+			TIM_CCxChannelCmd(htim1.Instance, TIM_CHANNEL_6, TIM_CCx_DISABLE);*/
 			//GPIOA->ODR ^= GPIO_PIN_15;
 			if (recordSamples) {
 				GPIOA->BRR = GPIO_PIN_15;
@@ -869,12 +873,14 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 	}
 }
 
-
 void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
 {
 	if (htim->Instance == TIM1) {
-		//GPIOA->ODR ^= GPIO_PIN_15;
-		GPIOA->BSRR = GPIO_PIN_15;
+		//if (hadc1.DMA_Handle->State == HAL_DMA_STATE_BUSY) {
+		if (DMA_Transfer_Ongoing) {
+			GPIOA->ODR ^= GPIO_PIN_15;
+		}
+		//GPIOA->BSRR = GPIO_PIN_15;
 		/*
 		GPIOA->BSRR = GPIO_PIN_15;
 		uint8_t i;
@@ -1158,7 +1164,7 @@ float PWM = 0;
 
 int32_t EncoderTicks = 0;
 
-__IO uint16_t ADC_DMA_Samples[100];
+__IO uint16_t ADC_DMA_Samples[33]; // should be +1 due to the first sample always being from the previous ADC sample when starting the DMA sequence
 
 /* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void const * argument)
@@ -1190,6 +1196,7 @@ void StartDefaultTask(void const * argument)
     //HAL_ADC_Start_IT(&hadc1);
     //__HAL_ADC_ENABLE_IT(&hadc1, ADC_IT_EOS);
     HAL_ADC_Start_DMA(&hadc1, (uint32_t*)&ADC_DMA_Samples, sizeof(ADC_DMA_Samples)/sizeof(ADC_DMA_Samples[0]));
+    __HAL_ADC_DISABLE_IT(&hadc1, ADC_IT_OVR); // disable Overrun interrupt since it will be triggered all the time during the "idle" period between DMA reads
 
     HAL_ADCEx_Calibration_Start(&hadc2, ADC_SINGLE_ENDED);
     HAL_ADC_Start_IT(&hadc2);
@@ -1201,7 +1208,7 @@ void StartDefaultTask(void const * argument)
     HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_3);
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_5);
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_6);
-    //__HAL_TIM_ENABLE_IT(&htim1, TIM_IT_UPDATE);
+    __HAL_TIM_ENABLE_IT(&htim1, TIM_IT_UPDATE);
 
     HAL_TIM_PWM_Start_IT(&htim1, TIM_CHANNEL_2); // __HAL_TIM_ENABLE_IT(&htim1, TIM_IT_CC2);
     HAL_TIM_PWM_Start_IT(&htim1, TIM_CHANNEL_4); // __HAL_TIM_ENABLE_IT(&htim1, TIM_IT_CC4);
@@ -1441,8 +1448,22 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   }
   /* USER CODE BEGIN Callback 1 */
   else if (htim->Instance == TIM1) {
-	  sampleIndex = 0;
-	  //GPIOA->BRR = GPIO_PIN_15;
+	  //sampleIndex = 0;
+	  //GPIOA->BSRR = GPIO_PIN_15;
+      /* Start the DMA channel */
+	  if (hadc1.DMA_Handle->State != HAL_DMA_STATE_READY) {
+		  HAL_DMA_Abort(hadc1.DMA_Handle);
+	  }
+	  __HAL_ADC_CLEAR_FLAG(&hadc1, (ADC_FLAG_EOC | ADC_FLAG_EOS | ADC_FLAG_OVR));
+	  /*uint32_t tmp = hadc1.Instance->DR; // Read existing data in ADC (if any), to ensure that DMA starts clean
+	  tmp = hadc1.Instance->ISR;
+	  __HAL_ADC_CLEAR_FLAG(&hadc1, (ADC_FLAG_EOC | ADC_FLAG_EOS | ADC_FLAG_OVR));
+	  hadc1.DMA_Handle->DmaBaseAddress->IFCR = (DMA_ISR_GIF1 << (hadc1.DMA_Handle->ChannelIndex & 0x1FU));*/
+	  /*TIM_CCxChannelCmd(htim1.Instance, TIM_CHANNEL_5, TIM_CCx_ENABLE);
+	  TIM_CCxChannelCmd(htim1.Instance, TIM_CHANNEL_6, TIM_CCx_ENABLE);*/
+	  // Even though I try clearing all the above, the DMA sample will still include the previous/most recent ADC sample as the first one, which is thus a sample captured at the OFF end.
+      HAL_DMA_Start_IT(hadc1.DMA_Handle, (uint32_t)&hadc1.Instance->DR, (uint32_t*)&ADC_DMA_Samples, sizeof(ADC_DMA_Samples)/sizeof(ADC_DMA_Samples[0]));
+      DMA_Transfer_Ongoing = 1;
 	  //ADC_Sample_Processing();
   }
   else if (htim->Instance == TIM4) {
