@@ -295,7 +295,7 @@ static void MX_ADC1_Init(void)
   }
   /** Configure Regular Channel
   */
-  sConfig.Channel = ADC_CHANNEL_3;
+  sConfig.Channel = ADC_CHANNEL_12;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLETIME_47CYCLES_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
@@ -373,7 +373,7 @@ static void MX_ADC2_Init(void)
   hadc2.Init.DiscontinuousConvMode = DISABLE;
   hadc2.Init.ExternalTrigConv = ADC_EXTERNALTRIG_T1_TRGO2;
   hadc2.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_RISING;
-  hadc2.Init.DMAContinuousRequests = DISABLE;
+  hadc2.Init.DMAContinuousRequests = ENABLE;
   hadc2.Init.Overrun = ADC_OVR_DATA_PRESERVED;
   hadc2.Init.OversamplingMode = DISABLE;
   if (HAL_ADC_Init(&hadc2) != HAL_OK)
@@ -384,7 +384,8 @@ static void MX_ADC2_Init(void)
   /** Configure Regular Channel
   */
   //sConfig.Channel = ADC_CHANNEL_1; // Vin
-  sConfig.Channel = ADC_CHANNEL_14; // BEMF3
+  //sConfig.Channel = ADC_CHANNEL_14; // BEMF3
+  sConfig.Channel = ADC_CHANNEL_VOPAMP3_ADC2; // ADC_CHANNEL_3; //ADC_CHANNEL_VOPAMP3_ADC2;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLETIME_47CYCLES_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
@@ -443,7 +444,7 @@ static void MX_OPAMP1_Init(void)
   hopamp1.Init.PowerMode = OPAMP_POWERMODE_NORMAL;
   hopamp1.Init.Mode = OPAMP_PGA_MODE;
   hopamp1.Init.NonInvertingInput = OPAMP_NONINVERTINGINPUT_IO0;
-  hopamp1.Init.InternalOutput = DISABLE;
+  hopamp1.Init.InternalOutput = ENABLE;
   hopamp1.Init.TimerControlledMuxmode = OPAMP_TIMERCONTROLLEDMUXMODE_DISABLE;
   hopamp1.Init.PgaConnect = OPAMP_PGA_CONNECT_INVERTINGINPUT_IO0_BIAS;
   hopamp1.Init.PgaGain = OPAMP_PGA_GAIN_16_OR_MINUS_15;
@@ -477,7 +478,7 @@ static void MX_OPAMP2_Init(void)
   hopamp2.Init.PowerMode = OPAMP_POWERMODE_NORMAL;
   hopamp2.Init.Mode = OPAMP_PGA_MODE;
   hopamp2.Init.NonInvertingInput = OPAMP_NONINVERTINGINPUT_IO0;
-  hopamp2.Init.InternalOutput = DISABLE;
+  hopamp2.Init.InternalOutput = ENABLE;
   hopamp2.Init.TimerControlledMuxmode = OPAMP_TIMERCONTROLLEDMUXMODE_DISABLE;
   hopamp2.Init.PgaConnect = OPAMP_PGA_CONNECT_INVERTINGINPUT_IO0_BIAS;
   hopamp2.Init.PgaGain = OPAMP_PGA_GAIN_16_OR_MINUS_15;
@@ -511,7 +512,7 @@ static void MX_OPAMP3_Init(void)
   hopamp3.Init.PowerMode = OPAMP_POWERMODE_NORMAL;
   hopamp3.Init.Mode = OPAMP_PGA_MODE;
   hopamp3.Init.NonInvertingInput = OPAMP_NONINVERTINGINPUT_IO0;
-  hopamp3.Init.InternalOutput = DISABLE;
+  hopamp3.Init.InternalOutput = ENABLE;
   hopamp3.Init.TimerControlledMuxmode = OPAMP_TIMERCONTROLLEDMUXMODE_DISABLE;
   hopamp3.Init.PgaConnect = OPAMP_PGA_CONNECT_INVERTINGINPUT_IO0_BIAS;
   hopamp3.Init.PgaGain = OPAMP_PGA_GAIN_16_OR_MINUS_15;
@@ -799,8 +800,10 @@ float currentSense = 0;
 _Bool recordSamples = 0;
 _Bool DMA_Transfer_Ongoing = 0;
 
+_Bool DirectionForward = 0;
+
 int32_t Encoder_Get();
-#define SAMPLE_BUFFER_SIZE 2000
+#define SAMPLE_BUFFER_SIZE 100
 uint16_t sample_index = 0;
 uint32_t times_low[SAMPLE_BUFFER_SIZE];
 uint32_t times_high[SAMPLE_BUFFER_SIZE];
@@ -830,7 +833,12 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 			/*TIM_CCxChannelCmd(htim1.Instance, TIM_CHANNEL_5, TIM_CCx_DISABLE);
 			TIM_CCxChannelCmd(htim1.Instance, TIM_CHANNEL_6, TIM_CCx_DISABLE);*/
 			//GPIOA->ODR ^= GPIO_PIN_15;
+			/*if (recordSamples) {
+				GPIOA->BRR = GPIO_PIN_15;
+			}*/
 			if (recordSamples) {
+				time_vin = HAL_GetHighResTick();
+				sample_vin = HAL_ADC_GetValue(hadc);
 				GPIOA->BRR = GPIO_PIN_15;
 			}
 
@@ -855,20 +863,25 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 				}
 
 				sample_index++;
-				if (sample_index == SAMPLE_BUFFER_SIZE) {
+				/*if (sample_index == SAMPLE_BUFFER_SIZE) {
 					TIM_CCxNChannelCmd(htim1.Instance, TIM_CHANNEL_3, TIM_CCxN_DISABLE); // Enable Coast mode
-				}
+				}*/
 			}
 
 			sampleIndex++;
 		//}
 	}
 	else if (hadc->Instance == ADC2) {
-		if (__HAL_ADC_GET_FLAG(hadc, ADC_FLAG_EOC)) {
+		/*if (__HAL_ADC_GET_FLAG(hadc, ADC_FLAG_EOC)) {
 			if (recordSamples) {
 				time_vin = HAL_GetHighResTick();
 				sample_vin = HAL_ADC_GetValue(hadc);
+				GPIOA->BRR = GPIO_PIN_15;
 			}
+		}*/
+		DMA_Transfer_Ongoing = 0;
+		if (recordSamples) {
+			GPIOA->BRR = GPIO_PIN_15;
 		}
 	}
 }
@@ -921,8 +934,13 @@ void SetTimerFrequencyWith50pctDutyCycle(uint32_t freq)
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, sampleLocation2);
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, sampleLocation2);
 
-	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
-	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, CENTER);
+	if (DirectionForward) {
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, CENTER);
+	} else {
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, CENTER);
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, 0);
+	}
 }
 
 void SetTimerFrequencyAndDutyCycle_MiddleSampling(uint32_t freq, float dutyPct)
@@ -960,8 +978,13 @@ void SetTimerFrequencyAndDutyCycle_MiddleSampling(uint32_t freq, float dutyPct)
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, sampleLocation2); // sample location - at the midpoint of the OFF-period minus the sample duration
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, sampleLocation2); // sample location - at the midpoint of the OFF-period minus the sample duration
 
-	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0); // set one side of the motor to LOW all the time  (necessary to be able to measure current through Shunt1)
-	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, CENTER); // control the duty cycle with the other side of the motor
+	if (DirectionForward) {
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0); // set one side of the motor to LOW all the time  (necessary to be able to measure current through Shunt1)
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, CENTER); // control the duty cycle with the other side of the motor
+	} else {
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, CENTER); // control the duty cycle with the other side of the motor
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, 0); // set one side of the motor to LOW all the time  (necessary to be able to measure current through Shunt1)
+	}
 }
 
 void SetTimerFrequencyAndDutyCycle_EndSampling(uint32_t freq, float dutyPct)
@@ -1006,8 +1029,13 @@ void SetTimerFrequencyAndDutyCycle_EndSampling(uint32_t freq, float dutyPct)
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, sampleLocation2);
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, sampleLocation2);
 
-	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
-	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, CENTER);
+	if (DirectionForward) {
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0); // set one side of the motor to LOW all the time  (necessary to be able to measure current through Shunt1)
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, CENTER); // control the duty cycle with the other side of the motor
+	} else {
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, CENTER); // control the duty cycle with the other side of the motor
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, 0); // set one side of the motor to LOW all the time  (necessary to be able to measure current through Shunt1)
+	}
 }
 
 void SetTimerFrequencyAndDutyCycle_MiddleSamplingOnce(uint32_t freq, float dutyPct)
@@ -1040,8 +1068,13 @@ void SetTimerFrequencyAndDutyCycle_MiddleSamplingOnce(uint32_t freq, float dutyP
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, 0);
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, 0);
 
-	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0); // set one side of the motor to LOW all the time  (necessary to be able to measure current through Shunt1)
-	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, CENTER); // control the duty cycle with the other side of the motor
+	if (DirectionForward) {
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0); // set one side of the motor to LOW all the time  (necessary to be able to measure current through Shunt1)
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, CENTER); // control the duty cycle with the other side of the motor
+	} else {
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, CENTER); // control the duty cycle with the other side of the motor
+		__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, 0); // set one side of the motor to LOW all the time  (necessary to be able to measure current through Shunt1)
+	}
 }
 
 FirstOrderLPF currentSenseLPF;
@@ -1149,6 +1182,45 @@ void SetMaxDuty(void)
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_SET);  // TIM1_CH3
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, GPIO_PIN_RESET); // TIM1_CH3N
 }
+
+void AllOff(void)
+{
+	GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    /**TIM1 GPIO Configuration
+    PC13     ------> TIM1_CH1N
+    PB15     ------> TIM1_CH3N
+    PA8     ------> TIM1_CH1
+    PA10     ------> TIM1_CH3
+    */
+    GPIO_InitStruct.Pin = GPIO_PIN_13;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Alternate = GPIO_AF4_TIM1;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = GPIO_PIN_15;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Alternate = GPIO_AF4_TIM1;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = GPIO_PIN_8|GPIO_PIN_9|GPIO_PIN_10|GPIO_PIN_12;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Alternate = GPIO_AF6_TIM1;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_8, GPIO_PIN_RESET);  // TIM1_CH1
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET); // TIM1_CH1N
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, GPIO_PIN_RESET);  // TIM1_CH2
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_12, GPIO_PIN_SET); // TIM1_CH2N
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET);  // TIM1_CH3
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, GPIO_PIN_SET); // TIM1_CH3N
+}
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -1192,14 +1264,15 @@ void StartDefaultTask(void const * argument)
 	FirstOrderLPF_Init(&currentSenseLPF, 1.f / 8500, 0.01f);
 
     HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
+    HAL_ADCEx_Calibration_Start(&hadc2, ADC_SINGLE_ENDED);
     //HAL_ADCEx_InjectedStart_IT(&hadc1);
     //HAL_ADC_Start_IT(&hadc1);
     //__HAL_ADC_ENABLE_IT(&hadc1, ADC_IT_EOS);
-    HAL_ADC_Start_DMA(&hadc1, (uint32_t*)&ADC_DMA_Samples, sizeof(ADC_DMA_Samples)/sizeof(ADC_DMA_Samples[0]));
-    __HAL_ADC_DISABLE_IT(&hadc1, ADC_IT_OVR); // disable Overrun interrupt since it will be triggered all the time during the "idle" period between DMA reads
+    //HAL_ADC_Start_IT(&hadc2);
 
-    HAL_ADCEx_Calibration_Start(&hadc2, ADC_SINGLE_ENDED);
-    HAL_ADC_Start_IT(&hadc2);
+    //HAL_ADC_Start_IT(&hadc2);
+    HAL_ADC_Start_DMA(&hadc2, (uint32_t*)&ADC_DMA_Samples, sizeof(ADC_DMA_Samples)/sizeof(ADC_DMA_Samples[0]));
+    __HAL_ADC_DISABLE_IT(&hadc2, ADC_IT_OVR); // disable Overrun interrupt since it will be triggered all the time during the "idle" period between DMA reads
 
 	// Start PWM interface
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
@@ -1379,9 +1452,14 @@ void StartDefaultTask(void const * argument)
 	recordSamples = 1;
 
 	uint32_t currentTime = HAL_GetTick();
-	while (sample_index < 2*SAMPLE_BUFFER_SIZE)
+	while (sample_index < SAMPLE_BUFFER_SIZE)
 	{
-		osDelay(1);
+		DirectionForward = 1;
+		SetTimerFrequencyAndDutyCycle_EndSampling(freq, duty);
+		osDelay(2000);
+		DirectionForward = 0;
+		SetTimerFrequencyAndDutyCycle_EndSampling(freq, duty);
+		osDelay(2000);
 	}
 
 	recordSamples = 0;
@@ -1393,6 +1471,7 @@ void StartDefaultTask(void const * argument)
 	// Disable motor and change to coast mode
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, 0);
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, 0);
+	TIM_CCxNChannelCmd(htim1.Instance, TIM_CHANNEL_1, TIM_CCxN_DISABLE);
 	TIM_CCxNChannelCmd(htim1.Instance, TIM_CHANNEL_3, TIM_CCxN_DISABLE);
 
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, 0);
@@ -1448,13 +1527,14 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   }
   /* USER CODE BEGIN Callback 1 */
   else if (htim->Instance == TIM1) {
+#if 1
 	  //sampleIndex = 0;
 	  //GPIOA->BSRR = GPIO_PIN_15;
       /* Start the DMA channel */
-	  if (hadc1.DMA_Handle->State != HAL_DMA_STATE_READY) {
-		  HAL_DMA_Abort(hadc1.DMA_Handle);
+	  if (hadc2.DMA_Handle->State != HAL_DMA_STATE_READY) {
+		  HAL_DMA_Abort(hadc2.DMA_Handle);
 	  }
-	  __HAL_ADC_CLEAR_FLAG(&hadc1, (ADC_FLAG_EOC | ADC_FLAG_EOS | ADC_FLAG_OVR));
+	  __HAL_ADC_CLEAR_FLAG(&hadc2, (ADC_FLAG_EOC | ADC_FLAG_EOS | ADC_FLAG_OVR));
 	  /*uint32_t tmp = hadc1.Instance->DR; // Read existing data in ADC (if any), to ensure that DMA starts clean
 	  tmp = hadc1.Instance->ISR;
 	  __HAL_ADC_CLEAR_FLAG(&hadc1, (ADC_FLAG_EOC | ADC_FLAG_EOS | ADC_FLAG_OVR));
@@ -1462,9 +1542,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	  /*TIM_CCxChannelCmd(htim1.Instance, TIM_CHANNEL_5, TIM_CCx_ENABLE);
 	  TIM_CCxChannelCmd(htim1.Instance, TIM_CHANNEL_6, TIM_CCx_ENABLE);*/
 	  // Even though I try clearing all the above, the DMA sample will still include the previous/most recent ADC sample as the first one, which is thus a sample captured at the OFF end.
-      HAL_DMA_Start_IT(hadc1.DMA_Handle, (uint32_t)&hadc1.Instance->DR, (uint32_t*)&ADC_DMA_Samples, sizeof(ADC_DMA_Samples)/sizeof(ADC_DMA_Samples[0]));
+      HAL_DMA_Start_IT(hadc2.DMA_Handle, (uint32_t)&hadc2.Instance->DR, (uint32_t*)&ADC_DMA_Samples, sizeof(ADC_DMA_Samples)/sizeof(ADC_DMA_Samples[0]));
       DMA_Transfer_Ongoing = 1;
 	  //ADC_Sample_Processing();
+#endif
   }
   else if (htim->Instance == TIM4) {
 	// Encoder overflow detected
