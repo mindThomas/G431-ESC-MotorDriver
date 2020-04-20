@@ -47,6 +47,7 @@
 ADC_HandleTypeDef hadc1;
 ADC_HandleTypeDef hadc2;
 DMA_HandleTypeDef hdma_adc1;
+DMA_HandleTypeDef hdma_adc2;
 
 OPAMP_HandleTypeDef hopamp1;
 OPAMP_HandleTypeDef hopamp2;
@@ -110,7 +111,7 @@ int main(void)
   /* USER CODE BEGIN 1 */
   SystemClock_Config();  // needs to be done as the first thing
   /* USER CODE END 1 */
-
+  
 
   /* MCU Configuration--------------------------------------------------------*/
 
@@ -170,7 +171,7 @@ int main(void)
 
   /* Start scheduler */
   osKernelStart();
-
+  
   /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
@@ -194,10 +195,10 @@ void SystemClock_Config(void)
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
   RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
-  /** Configure the main internal regulator output voltage
+  /** Configure the main internal regulator output voltage 
   */
   HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1_BOOST);
-  /** Initializes the CPU, AHB and APB busses clocks
+  /** Initializes the CPU, AHB and APB busses clocks 
   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
@@ -212,7 +213,7 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  /** Initializes the CPU, AHB and APB busses clocks
+  /** Initializes the CPU, AHB and APB busses clocks 
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
@@ -225,7 +226,7 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  /** Initializes the peripherals clocks
+  /** Initializes the peripherals clocks 
   */
   PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC12;
   PeriphClkInit.Adc12ClockSelection = RCC_ADC12CLKSOURCE_SYSCLK;//RCC_ADC12CLKSOURCE_PLL;
@@ -241,7 +242,7 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  /** Enables the Clock Security System
+  /** Enables the Clock Security System 
   */
   HAL_RCC_EnableCSS();
 }
@@ -264,7 +265,7 @@ static void MX_ADC1_Init(void)
   /* USER CODE BEGIN ADC1_Init 1 */
 
   /* USER CODE END ADC1_Init 1 */
-  /** Common config
+  /** Common config 
   */
   hadc1.Instance = ADC1;
   hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4; // Take ADC PLL-based clock (68 MHz) and divide with this Prescaler
@@ -286,16 +287,16 @@ static void MX_ADC1_Init(void)
   {
     Error_Handler();
   }
-  /** Configure the ADC multi-mode
+  /** Configure the ADC multi-mode 
   */
   multimode.Mode = ADC_MODE_INDEPENDENT;
   if (HAL_ADCEx_MultiModeConfigChannel(&hadc1, &multimode) != HAL_OK)
   {
     Error_Handler();
   }
-  /** Configure Regular Channel
+  /** Configure Regular Channel 
   */
-  sConfig.Channel = ADC_CHANNEL_12;
+  sConfig.Channel = ADC_CHANNEL_VOPAMP1;
   sConfig.Rank = ADC_REGULAR_RANK_1;
   sConfig.SamplingTime = ADC_SAMPLETIME_47CYCLES_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
@@ -314,7 +315,7 @@ static void MX_ADC1_Init(void)
   {
     Error_Handler();
   }
-  /** Configure Regular Channel
+  /** Configure Regular Channel 
   */
   sConfig.Channel = ADC_CHANNEL_VREFINT;
   sConfig.Rank = ADC_REGULAR_RANK_3;
@@ -322,7 +323,7 @@ static void MX_ADC1_Init(void)
   {
     Error_Handler();
   }
-  /** Configure Regular Channel
+  /** Configure Regular Channel 
   */
   sConfig.Channel = ADC_CHANNEL_VOPAMP1;
   sConfig.Rank = ADC_REGULAR_RANK_4;
@@ -358,7 +359,7 @@ static void MX_ADC2_Init(void)
   /* USER CODE BEGIN ADC2_Init 1 */
 
   /* USER CODE END ADC2_Init 1 */
-  /** Common config
+  /** Common config 
   */
   hadc2.Instance = ADC2;
   hadc2.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4; // Take ADC PLL-based clock (68 MHz) and divide with this Prescaler
@@ -410,7 +411,7 @@ static void MX_ADC2_Init(void)
   {
     Error_Handler();
   }
-  /** Configure Regular Channel
+  /** Configure Regular Channel 
   */
   sConfig.Channel = ADC_CHANNEL_VOPAMP3_ADC2;
   sConfig.Rank = ADC_REGULAR_RANK_2;
@@ -699,6 +700,8 @@ static void MX_DMA_Init(void)
   HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 3, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
 
+  HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 3, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
 }
 
 /**
@@ -1236,11 +1239,15 @@ float PWM = 0;
 
 int32_t EncoderTicks = 0;
 
-__IO uint16_t ADC_DMA_Samples[33]; // should be +1 due to the first sample always being from the previous ADC sample when starting the DMA sequence
+__IO uint16_t ADC_DMA_Samples1[33]; // should be +1 due to the first sample always being from the previous ADC sample when starting the DMA sequence
+__IO uint16_t ADC_DMA_Samples2[33]; // should be +1 due to the first sample always being from the previous ADC sample when starting the DMA sequence
 
 /* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void const * argument)
 {
+    
+    
+    
 
   /* USER CODE BEGIN 5 */
 	GPIO_InitTypeDef GPIO_InitStruct = {0};
@@ -1271,7 +1278,9 @@ void StartDefaultTask(void const * argument)
     //HAL_ADC_Start_IT(&hadc2);
 
     //HAL_ADC_Start_IT(&hadc2);
-    HAL_ADC_Start_DMA(&hadc2, (uint32_t*)&ADC_DMA_Samples, sizeof(ADC_DMA_Samples)/sizeof(ADC_DMA_Samples[0]));
+    HAL_ADC_Start_DMA(&hadc1, (uint32_t*)&ADC_DMA_Samples1, sizeof(ADC_DMA_Samples1)/sizeof(ADC_DMA_Samples1[0]));
+    __HAL_ADC_DISABLE_IT(&hadc1, ADC_IT_OVR); // disable Overrun interrupt since it will be triggered all the time during the "idle" period between DMA reads
+    HAL_ADC_Start_DMA(&hadc2, (uint32_t*)&ADC_DMA_Samples2, sizeof(ADC_DMA_Samples2)/sizeof(ADC_DMA_Samples2[0]));
     __HAL_ADC_DISABLE_IT(&hadc2, ADC_IT_OVR); // disable Overrun interrupt since it will be triggered all the time during the "idle" period between DMA reads
 
 	// Start PWM interface
@@ -1506,7 +1515,7 @@ void StartDefaultTask(void const * argument)
 
 		osDelay(1);
 	}
-  /* USER CODE END 5 */
+  /* USER CODE END 5 */ 
 }
 
 /**
@@ -1531,6 +1540,22 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	  //sampleIndex = 0;
 	  //GPIOA->BSRR = GPIO_PIN_15;
       /* Start the DMA channel */
+	  if (hadc1.DMA_Handle->State != HAL_DMA_STATE_READY) {
+		  HAL_DMA_Abort(hadc1.DMA_Handle);
+	  }
+	  __HAL_ADC_CLEAR_FLAG(&hadc1, (ADC_FLAG_EOC | ADC_FLAG_EOS | ADC_FLAG_OVR));
+	  /*uint32_t tmp = hadc1.Instance->DR; // Read existing data in ADC (if any), to ensure that DMA starts clean
+	  tmp = hadc1.Instance->ISR;
+	  __HAL_ADC_CLEAR_FLAG(&hadc1, (ADC_FLAG_EOC | ADC_FLAG_EOS | ADC_FLAG_OVR));
+	  hadc1.DMA_Handle->DmaBaseAddress->IFCR = (DMA_ISR_GIF1 << (hadc1.DMA_Handle->ChannelIndex & 0x1FU));*/
+	  /*TIM_CCxChannelCmd(htim1.Instance, TIM_CHANNEL_5, TIM_CCx_ENABLE);
+	  TIM_CCxChannelCmd(htim1.Instance, TIM_CHANNEL_6, TIM_CCx_ENABLE);*/
+	  // Even though I try clearing all the above, the DMA sample will still include the previous/most recent ADC sample as the first one, which is thus a sample captured at the OFF end.
+      HAL_DMA_Start_IT(hadc1.DMA_Handle, (uint32_t)&hadc1.Instance->DR, (uint32_t*)&ADC_DMA_Samples1, sizeof(ADC_DMA_Samples1)/sizeof(ADC_DMA_Samples1[0]));
+
+	  //sampleIndex = 0;
+	  //GPIOA->BSRR = GPIO_PIN_15;
+      /* Start the DMA channel */
 	  if (hadc2.DMA_Handle->State != HAL_DMA_STATE_READY) {
 		  HAL_DMA_Abort(hadc2.DMA_Handle);
 	  }
@@ -1542,7 +1567,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	  /*TIM_CCxChannelCmd(htim1.Instance, TIM_CHANNEL_5, TIM_CCx_ENABLE);
 	  TIM_CCxChannelCmd(htim1.Instance, TIM_CHANNEL_6, TIM_CCx_ENABLE);*/
 	  // Even though I try clearing all the above, the DMA sample will still include the previous/most recent ADC sample as the first one, which is thus a sample captured at the OFF end.
-      HAL_DMA_Start_IT(hadc2.DMA_Handle, (uint32_t)&hadc2.Instance->DR, (uint32_t*)&ADC_DMA_Samples, sizeof(ADC_DMA_Samples)/sizeof(ADC_DMA_Samples[0]));
+      HAL_DMA_Start_IT(hadc2.DMA_Handle, (uint32_t)&hadc2.Instance->DR, (uint32_t*)&ADC_DMA_Samples2, sizeof(ADC_DMA_Samples2)/sizeof(ADC_DMA_Samples2[0]));
+
       DMA_Transfer_Ongoing = 1;
 	  //ADC_Sample_Processing();
 #endif
@@ -1578,7 +1604,7 @@ void Error_Handler(void)
   * @retval None
   */
 void assert_failed(uint8_t *file, uint32_t line)
-{
+{ 
   /* USER CODE BEGIN 6 */
   /* User can add his own implementation to report the file name and line number,
      tex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
