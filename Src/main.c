@@ -56,7 +56,9 @@ OPAMP_HandleTypeDef hopamp3;
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim4;
 
-UART_HandleTypeDef uart2;
+UART_HandleTypeDef huart2;
+DMA_HandleTypeDef hdma_usart2_rx;
+DMA_HandleTypeDef hdma_usart2_tx;
 
 osThreadId defaultTaskHandle;
 /* USER CODE BEGIN PV */
@@ -73,8 +75,8 @@ static void MX_OPAMP1_Init(void);
 static void MX_OPAMP2_Init(void);
 static void MX_OPAMP3_Init(void);
 static void MX_TIM1_Init(void);
-static void MX_UART2_Init(void);
 static void MX_TIM4_Init(void);
+static void MX_USART2_UART_Init(void);
 void StartDefaultTask(void const * argument);
 
 /* USER CODE BEGIN PFP */
@@ -138,8 +140,8 @@ int main(void)
   MX_OPAMP2_Init();
   MX_OPAMP3_Init();
   MX_TIM1_Init();
-  MX_UART2_Init();
   MX_TIM4_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -684,6 +686,53 @@ static void MX_TIM4_Init(void)
 
 }
 
+/**
+  * @brief USART2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART2_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART2_Init 0 */
+
+  /* USER CODE END USART2_Init 0 */
+
+  /* USER CODE BEGIN USART2_Init 1 */
+
+  /* USER CODE END USART2_Init 1 */
+  huart2.Instance = USART2;
+  huart2.Init.BaudRate = 460800;
+  huart2.Init.WordLength = UART_WORDLENGTH_8B;
+  huart2.Init.StopBits = UART_STOPBITS_1;
+  huart2.Init.Parity = UART_PARITY_NONE;
+  huart2.Init.Mode = UART_MODE_TX_RX;
+  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart2.Init.ClockPrescaler = UART_PRESCALER_DIV1;
+  huart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_UARTEx_SetTxFifoThreshold(&huart2, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_UARTEx_SetRxFifoThreshold(&huart2, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  if (HAL_UARTEx_DisableFifoMode(&huart2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART2_Init 2 */
+
+  /* USER CODE END USART2_Init 2 */
+
+}
 
 /** 
   * Enable DMA controller clock
@@ -702,6 +751,13 @@ static void MX_DMA_Init(void)
 
   HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 3, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
+  /* DMA1_Channel3_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);
+  /* DMA1_Channel4_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel4_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel4_IRQn);
+
 }
 
 /**
@@ -745,49 +801,6 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-}
-
-/**
-  * @brief USART1 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_UART2_Init(void)
-{/* USER CODE BEGIN LPUART1_Init 0 */
-
-	  /* USER CODE END LPUART1_Init 0 */
-
-	  /* USER CODE BEGIN LPUART1_Init 1 */
-
-	  /* USER CODE END LPUART1_Init 1 */
-	  uart2.Instance = USART2;
-	  uart2.Init.BaudRate = 115200;
-	  uart2.Init.WordLength = UART_WORDLENGTH_8B;
-	  uart2.Init.StopBits = UART_STOPBITS_1;
-	  uart2.Init.Parity = UART_PARITY_NONE;
-	  uart2.Init.Mode = UART_MODE_TX_RX;
-	  uart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-	  uart2.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-	  uart2.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-	  if (HAL_UART_Init(&uart2) != HAL_OK)
-	  {
-	    Error_Handler();
-	  }
-	  if (HAL_UARTEx_SetTxFifoThreshold(&uart2, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
-	  {
-	    Error_Handler();
-	  }
-	  if (HAL_UARTEx_SetRxFifoThreshold(&uart2, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
-	  {
-	    Error_Handler();
-	  }
-	  if (HAL_UARTEx_DisableFifoMode(&uart2) != HAL_OK)
-	  {
-	    Error_Handler();
-	  }
-	  /* USER CODE BEGIN LPUART1_Init 2 */
-
-	  /* USER CODE END LPUART1_Init 2 */
 }
 
 /* USER CODE BEGIN 4 */
@@ -1242,6 +1255,8 @@ int32_t EncoderTicks = 0;
 __IO uint16_t ADC_DMA_Samples1[33]; // should be +1 due to the first sample always being from the previous ADC sample when starting the DMA sequence
 __IO uint16_t ADC_DMA_Samples2[33]; // should be +1 due to the first sample always being from the previous ADC sample when starting the DMA sequence
 
+uint8_t UART_Data[4608] = {0};
+
 /* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void const * argument)
 {
@@ -1251,6 +1266,21 @@ void StartDefaultTask(void const * argument)
 
   /* USER CODE BEGIN 5 */
 	GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+	for (uint16_t i = 0; i < sizeof(UART_Data); i++) {
+		UART_Data[i] = (i % 256);
+	}
+	uint8_t step = 0;
+	/*while (1) {
+		UART_Data[0] = step + '0';
+		step = (step + 1) % 10;
+		HAL_UART_Transmit(&huart2, UART_Data, sizeof(UART_Data), 0xFFFF);
+	}*/
+    HAL_UART_Transmit_DMA(&huart2, UART_Data, sizeof(UART_Data));
+    while (1)
+    {
+    	osDelay(100);
+    }
 
 	// Disable TIM1 CH3N (set low) to force OUT3 to be toggle between high and floating depending on PWM (instead of toggling between high and low)
     /*GPIO_InitStruct.Pin = GPIO_PIN_15;
@@ -1486,12 +1516,12 @@ void StartDefaultTask(void const * argument)
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_5, 0);
 	__HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_6, 0);
 
-	HAL_UART_Transmit(&uart2, times_low, sizeof(times_low), 0xFFFF);
-	HAL_UART_Transmit(&uart2, samples_low, sizeof(samples_low), 0xFFFF);
-	HAL_UART_Transmit(&uart2, times_high, sizeof(times_high), 0xFFFF);
-	HAL_UART_Transmit(&uart2, samples_high, sizeof(samples_high), 0xFFFF);
-	//HAL_UART_Transmit(&uart2, time_vin, sizeof(time_vin), 0xFFFF);
-	//HAL_UART_Transmit(&uart2, sample_vin, sizeof(sample_vin), 0xFFFF);
+	HAL_UART_Transmit(&huart2, times_low, sizeof(times_low), 0xFFFF);
+	HAL_UART_Transmit(&huart2, samples_low, sizeof(samples_low), 0xFFFF);
+	HAL_UART_Transmit(&huart2, times_high, sizeof(times_high), 0xFFFF);
+	HAL_UART_Transmit(&huart2, samples_high, sizeof(samples_high), 0xFFFF);
+	//HAL_UART_Transmit(&huart2, time_vin, sizeof(time_vin), 0xFFFF);
+	//HAL_UART_Transmit(&huart2, sample_vin, sizeof(sample_vin), 0xFFFF);
 
 	HAL_GPIO_WritePin(GPIOC, GPIO_PIN_6, GPIO_PIN_RESET);
 
@@ -1581,6 +1611,46 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 		EncoderOffset += 0x10000;
   }
   /* USER CODE END Callback 1 */
+}
+
+/**
+  * @brief  Tx Transfer completed callback
+  * @param  UartHandle: UART handle.
+  * @note   This example shows a simple way to report end of DMA Tx transfer, and
+  *         you can add your own implementation.
+  * @retval None
+  */
+uint32_t TxFinishTimestamp1 = 0;
+uint32_t TxFinishTimestamp2 = 0;
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *UartHandle)
+{
+	TxFinishTimestamp1 = TxFinishTimestamp2;
+	TxFinishTimestamp2 = HAL_GetHighResTick();
+}
+
+/**
+  * @brief  Rx Transfer completed callback
+  * @param  UartHandle: UART handle
+  * @note   This example shows a simple way to report end of DMA Rx transfer, and
+  *         you can add your own implementation.
+  * @retval None
+  */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle)
+{
+
+
+}
+
+/**
+  * @brief  UART error callbacks
+  * @param  UartHandle: UART handle
+  * @note   This example shows a simple way to report transfer error, and you can
+  *         add your own implementation.
+  * @retval None
+  */
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *UartHandle)
+{
+
 }
 
 /**
