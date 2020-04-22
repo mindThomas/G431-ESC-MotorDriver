@@ -69,7 +69,7 @@ extern DMA_HandleTypeDef hdma_usart2_tx;
 extern TIM_HandleTypeDef htim15;
 
 /* USER CODE BEGIN EV */
-
+extern UART_HandleTypeDef huart2;
 /* USER CODE END EV */
 
 /******************************************************************************/
@@ -274,6 +274,15 @@ void TIM4_IRQHandler(void)
 void TIM1_CC_IRQHandler(void)
 {
   HAL_TIM_IRQHandler(&htim1);
+}
+
+void USART2_IRQHandler(void)
+{
+    /* Check for IDLE line interrupt */
+    if (__HAL_UART_GET_IT_SOURCE(&huart2, UART_IT_IDLE) && __HAL_UART_GET_IT(&huart2, UART_IT_IDLE)) {
+    	__HAL_UART_CLEAR_IDLEFLAG(&huart2); // Clear IDLE line flag
+        USART_RX_Check(); // Check for data to process
+    }
 }
 /* USER CODE END 1 */
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

@@ -752,10 +752,10 @@ static void MX_DMA_Init(void)
   HAL_NVIC_SetPriority(DMA1_Channel2_IRQn, 3, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel2_IRQn);
   /* DMA1_Channel3_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 5, 0);
+  HAL_NVIC_SetPriority(DMA1_Channel3_IRQn, 4, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel3_IRQn);
   /* DMA1_Channel4_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel4_IRQn, 5, 0);
+  HAL_NVIC_SetPriority(DMA1_Channel4_IRQn, 4, 0);
   HAL_NVIC_EnableIRQ(DMA1_Channel4_IRQn);
 
 }
@@ -1256,6 +1256,7 @@ __IO uint16_t ADC_DMA_Samples1[33]; // should be +1 due to the first sample alwa
 __IO uint16_t ADC_DMA_Samples2[33]; // should be +1 due to the first sample always being from the previous ADC sample when starting the DMA sequence
 
 uint8_t UART_Data[4608] = {0};
+uint8_t UART_RX_Data[10] = {0};
 
 /* USER CODE END Header_StartDefaultTask */
 void StartDefaultTask(void const * argument)
@@ -1265,8 +1266,8 @@ void StartDefaultTask(void const * argument)
     
 
   /* USER CODE BEGIN 5 */
-	GPIO_InitTypeDef GPIO_InitStruct = {0};
-
+	HAL_UART_Receive_DMA(&huart2, UART_RX_Data, sizeof(UART_RX_Data));
+	__HAL_UART_ENABLE_IT(&huart2, UART_IT_IDLE);
 	for (uint16_t i = 0; i < sizeof(UART_Data); i++) {
 		UART_Data[i] = (i % 256);
 	}
@@ -1283,6 +1284,7 @@ void StartDefaultTask(void const * argument)
     }
 
 	// Disable TIM1 CH3N (set low) to force OUT3 to be toggle between high and floating depending on PWM (instead of toggling between high and low)
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
     /*GPIO_InitStruct.Pin = GPIO_PIN_15;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
@@ -1637,8 +1639,12 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *UartHandle)
   */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle)
 {
+	USART_RX_Check();
+}
 
-
+void HAL_UART_RxHalfCpltCallback(UART_HandleTypeDef *UartHandle)
+{
+	USART_RX_Check();
 }
 
 /**
@@ -1651,6 +1657,35 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *UartHandle)
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *UartHandle)
 {
 
+}
+
+uint8_t RX_Buffer[2000];
+uint32_t total_rx_bytes = 0;
+void USART_RX_Check(void)
+{
+	const uint32_t DMA_RX_Buffer_Length = sizeof(UART_RX_Data);
+	static uint32_t DMA_RX_ReadPos = 0;
+	uint32_t DMA_RX_WritePos = DMA_RX_Buffer_Length - __HAL_DMA_GET_COUNTER(huart2.hdmarx);
+
+	if (DMA_RX_ReadPos != DMA_RX_WritePos) {
+		uint32_t NumBytesReceived = (DMA_RX_WritePos - DMA_RX_ReadPos) % DMA_RX_Buffer_Length;
+		if (DMA_RX_WritePos > DMA_RX_ReadPos) {
+			// Process data from read position and forward
+			memcpy(&RX_Buffer[total_rx_bytes], &UART_RX_Data[DMA_RX_ReadPos], NumBytesReceived);
+			total_rx_bytes += NumBytesReceived;
+		} else {
+			// The DMA circular buffer has wrapped around
+			memcpy(&RX_Buffer[total_rx_bytes], &UART_RX_Data[DMA_RX_ReadPos], (DMA_RX_Buffer_Length - DMA_RX_ReadPos));
+			total_rx_bytes += (DMA_RX_Buffer_Length - DMA_RX_ReadPos);
+
+			// If more data is available after wrap-around, process this as well
+			if (DMA_RX_WritePos > 0) {
+				memcpy(&UART_RX_Data[0], &RX_Buffer[total_rx_bytes], DMA_RX_WritePos);
+				total_rx_bytes += DMA_RX_WritePos;
+			}
+		}
+    }
+	DMA_RX_ReadPos = DMA_RX_WritePos; // We have now processed the data, so move the read cursor
 }
 
 /**
