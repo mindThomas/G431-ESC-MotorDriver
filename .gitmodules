@@ -1,0 +1,3 @@
+[submodule "STM32-libraries"]
+	path = STM32-libraries
+	url = git@github.com:mindThomas/STM32-libraries.git
