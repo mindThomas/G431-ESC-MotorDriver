@@ -24,8 +24,10 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "stm32g4xx_hal_fdcan.h"
 #include "FirstOrderLPF.h"
 #include <math.h>
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -48,6 +50,8 @@ ADC_HandleTypeDef hadc1;
 ADC_HandleTypeDef hadc2;
 DMA_HandleTypeDef hdma_adc1;
 DMA_HandleTypeDef hdma_adc2;
+
+FDCAN_HandleTypeDef hfdcan1;
 
 OPAMP_HandleTypeDef hopamp1;
 OPAMP_HandleTypeDef hopamp2;
@@ -77,6 +81,7 @@ static void MX_OPAMP3_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_TIM4_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_FDCAN1_Init(void);
 void StartDefaultTask(void const * argument);
 
 /* USER CODE BEGIN PFP */
@@ -142,6 +147,7 @@ int main(void)
   MX_TIM1_Init();
   MX_TIM4_Init();
   MX_USART2_UART_Init();
+  MX_FDCAN1_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -206,9 +212,9 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = RCC_PLLM_DIV2;
-  RCC_OscInitStruct.PLL.PLLN = 85;
-  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV5;
+  RCC_OscInitStruct.PLL.PLLM = RCC_PLLM_DIV1;
+  RCC_OscInitStruct.PLL.PLLN = 42;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
   RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
@@ -240,6 +246,14 @@ void SystemClock_Config(void)
   */
   PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART2;
   PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Initializes the peripherals clocks
+  */
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_FDCAN;
+  PeriphClkInit.FdcanClockSelection = RCC_FDCANCLKSOURCE_PCLK1;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
@@ -425,6 +439,49 @@ static void MX_ADC2_Init(void)
   /* USER CODE BEGIN ADC2_Init 2 */
 
   /* USER CODE END ADC2_Init 2 */
+
+}
+
+/**
+  * @brief FDCAN1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_FDCAN1_Init(void)
+{
+
+  /* USER CODE BEGIN FDCAN1_Init 0 */
+
+  /* USER CODE END FDCAN1_Init 0 */
+
+  /* USER CODE BEGIN FDCAN1_Init 1 */
+
+  /* USER CODE END FDCAN1_Init 1 */
+  hfdcan1.Instance = FDCAN1;
+  hfdcan1.Init.ClockDivider = FDCAN_CLOCK_DIV28;
+  hfdcan1.Init.FrameFormat = FDCAN_FRAME_CLASSIC;
+  hfdcan1.Init.Mode = FDCAN_MODE_NORMAL;
+  hfdcan1.Init.AutoRetransmission = DISABLE;
+  hfdcan1.Init.TransmitPause = DISABLE;
+  hfdcan1.Init.ProtocolException = DISABLE;
+  hfdcan1.Init.NominalPrescaler = 4;
+  hfdcan1.Init.NominalSyncJumpWidth = 1;
+  hfdcan1.Init.NominalTimeSeg1 = 7; // Configure CAN to 100 kbit/s   (see CAN Timing.xmcd)
+  hfdcan1.Init.NominalTimeSeg2 = 7;
+  hfdcan1.Init.DataPrescaler = 4;
+  hfdcan1.Init.DataSyncJumpWidth = 1;
+  hfdcan1.Init.DataTimeSeg1 = 7;
+  hfdcan1.Init.DataTimeSeg2 = 7;
+  hfdcan1.Init.StdFiltersNbr = 0;
+  hfdcan1.Init.ExtFiltersNbr = 0;
+  hfdcan1.Init.TxFifoQueueMode = FDCAN_TX_FIFO_OPERATION;
+  if (HAL_FDCAN_Init(&hfdcan1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN FDCAN1_Init 2 */
+
+  /* USER CODE END FDCAN1_Init 2 */
 
 }
 
@@ -1237,6 +1294,103 @@ void AllOff(void)
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET);  // TIM1_CH3
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, GPIO_PIN_SET); // TIM1_CH3N
 }
+
+void CAN_Configure(void)
+{
+	GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = GPIO_PIN_11 | GPIO_PIN_14;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, GPIO_PIN_RESET); // Enable CAN termination
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_11, GPIO_PIN_RESET); // Disable CAN shutdown
+
+	  /* Configure reception filter to Rx FIFO 0 on both FDCAN instances */
+	  FDCAN_FilterTypeDef sFilterConfig;
+	  sFilterConfig.IdType = FDCAN_STANDARD_ID;
+	  sFilterConfig.FilterIndex = 0;
+	  sFilterConfig.FilterType = FDCAN_FILTER_MASK;
+	  sFilterConfig.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
+	  sFilterConfig.FilterID1 = 0x111;
+	  sFilterConfig.FilterID2 = 0x7FF;
+	  if (HAL_FDCAN_ConfigFilter(&hfdcan1, &sFilterConfig) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }
+
+	  /* Configure global filter on both FDCAN instances:
+	     Filter all remote frames with STD and EXT ID
+	     Reject non matching frames with STD ID and EXT ID */
+	  if (HAL_FDCAN_ConfigGlobalFilter(&hfdcan1, FDCAN_ACCEPT_IN_RX_FIFO0, FDCAN_ACCEPT_IN_RX_FIFO0, FDCAN_FILTER_REMOTE, FDCAN_FILTER_REMOTE) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }
+	  /* Activate Rx FIFO 0 new message notification on both FDCAN instances */
+	  if (HAL_FDCAN_ActivateNotification(&hfdcan1, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }
+	  if (HAL_FDCAN_ConfigInterruptLines(&hfdcan1, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, FDCAN_INTERRUPT_LINE0) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }
+
+	  /* Configure and enable Tx Delay Compensation, required for BRS mode.
+	     TdcOffset default recommended value: DataTimeSeg1 * DataPrescaler
+	     TdcFilter default recommended value: 0 */
+	  /*if (HAL_FDCAN_ConfigTxDelayCompensation(&hfdcan1, 5, 0) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }
+	  if (HAL_FDCAN_EnableTxDelayCompensation(&hfdcan1) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }*/
+
+	  /* Start the FDCAN module on both FDCAN instances */
+	  if (HAL_FDCAN_Start(&hfdcan1) != HAL_OK)
+	  {
+	    Error_Handler();
+	  }
+}
+
+void CAN_Transmit(uint32_t ID, uint8_t * Payload, uint8_t payloadLength)
+{
+	/* Prepare Tx message Header */
+	FDCAN_TxHeaderTypeDef TxHeader;
+	TxHeader.Identifier = ID;
+	TxHeader.IdType = FDCAN_STANDARD_ID;
+	TxHeader.TxFrameType = FDCAN_DATA_FRAME;
+	TxHeader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
+	TxHeader.BitRateSwitch = FDCAN_BRS_ON;
+	TxHeader.FDFormat = FDCAN_FD_CAN;
+	TxHeader.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
+	TxHeader.MessageMarker = 0;
+
+	if (payloadLength <= 8) {
+		TxHeader.DataLength = ((uint32_t)payloadLength) * 0x00010000U;
+	}
+	else {
+		switch (payloadLength) {
+			case 12: TxHeader.DataLength = FDCAN_DLC_BYTES_12; break;
+			case 16: TxHeader.DataLength = FDCAN_DLC_BYTES_16; break;
+			case 20: TxHeader.DataLength = FDCAN_DLC_BYTES_20; break;
+			case 24: TxHeader.DataLength = FDCAN_DLC_BYTES_24; break;
+			case 32: TxHeader.DataLength = FDCAN_DLC_BYTES_32; break;
+			case 48: TxHeader.DataLength = FDCAN_DLC_BYTES_48; break;
+			case 64: TxHeader.DataLength = FDCAN_DLC_BYTES_64; break;
+			default: TxHeader.DataLength = 0; break;
+		}
+	}
+
+	/* Add message to TX FIFO of FDCAN instance 1 */
+	HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &TxHeader, Payload);
+
+	/* Wait transmissions complete */
+	while (HAL_FDCAN_GetTxFifoFreeLevel(&hfdcan1) == 0) {}
+}
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -1266,22 +1420,26 @@ void StartDefaultTask(void const * argument)
     
 
   /* USER CODE BEGIN 5 */
-	HAL_UART_Receive_DMA(&huart2, UART_RX_Data, sizeof(UART_RX_Data));
+	/*HAL_UART_Receive_DMA(&huart2, UART_RX_Data, sizeof(UART_RX_Data));
 	__HAL_UART_ENABLE_IT(&huart2, UART_IT_IDLE);
 	for (uint16_t i = 0; i < sizeof(UART_Data); i++) {
 		UART_Data[i] = (i % 256);
 	}
 	uint8_t step = 0;
-	/*while (1) {
-		UART_Data[0] = step + '0';
-		step = (step + 1) % 10;
-		HAL_UART_Transmit(&huart2, UART_Data, sizeof(UART_Data), 0xFFFF);
-	}*/
     HAL_UART_Transmit_DMA(&huart2, UART_Data, sizeof(UART_Data));
     while (1)
     {
     	osDelay(100);
-    }
+    }*/
+
+	CAN_Configure();
+	uint8_t ID = 0x12;
+	uint8_t Data[] = {0x01, 0x02, 0x03, 0x04, 0xFF, 0xFE};
+	while (1)
+	{
+		CAN_Transmit(ID, Data, sizeof(Data));
+		osDelay(2);
+	}
 
 	// Disable TIM1 CH3N (set low) to force OUT3 to be toggle between high and floating depending on PWM (instead of toggling between high and low)
     GPIO_InitTypeDef GPIO_InitStruct = {0};
@@ -1686,6 +1844,39 @@ void USART_RX_Check(void)
 		}
     }
 	DMA_RX_ReadPos = DMA_RX_WritePos; // We have now processed the data, so move the read cursor
+}
+
+void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
+{
+	FDCAN_RxHeaderTypeDef Header;
+	uint8_t Data[64] = {0};
+	HAL_FDCAN_GetRxMessage(&hfdcan1, FDCAN_RX_FIFO0, &Header, Data);
+
+	if (Header.IdType == FDCAN_STANDARD_ID) {
+		volatile uint32_t PackageID = Header.Identifier;
+		volatile uint8_t PackageLength = 0;
+
+		switch (Header.DataLength)
+		{
+			case FDCAN_DLC_BYTES_0: PackageLength = 0; break;
+			case FDCAN_DLC_BYTES_1: PackageLength = 1; break;
+			case FDCAN_DLC_BYTES_2: PackageLength = 2; break;
+			case FDCAN_DLC_BYTES_3: PackageLength = 3; break;
+			case FDCAN_DLC_BYTES_4: PackageLength = 4; break;
+			case FDCAN_DLC_BYTES_5: PackageLength = 5; break;
+			case FDCAN_DLC_BYTES_6: PackageLength = 6; break;
+			case FDCAN_DLC_BYTES_7: PackageLength = 7; break;
+			case FDCAN_DLC_BYTES_8: PackageLength = 8; break;
+			case FDCAN_DLC_BYTES_12: PackageLength = 12; break;
+			case FDCAN_DLC_BYTES_16: PackageLength = 16; break;
+			case FDCAN_DLC_BYTES_20: PackageLength = 20; break;
+			case FDCAN_DLC_BYTES_24: PackageLength = 24; break;
+			case FDCAN_DLC_BYTES_32: PackageLength = 32; break;
+			case FDCAN_DLC_BYTES_48: PackageLength = 48; break;
+			case FDCAN_DLC_BYTES_64: PackageLength = 64; break;
+			default: break;
+		}
+	}
 }
 
 /**
