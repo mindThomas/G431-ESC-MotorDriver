@@ -23,10 +23,13 @@
 
 /* Include Periphiral drivers */
 #include "UART.h"
+#include "IO.h"
+#include "Encoder.h"
 
 /* Include Drivers */
 
 /* Include Module libraries */
+#include "Debug.h"
 
 /* Include Application-layer libraries */
 
@@ -51,15 +54,15 @@ void MainTask(void * pvParameters)
 	 */
 
 	UART * uart = new UART(UART::PORT_UART2, 115200, 100, true);
-	//uart->RegisterRXcallback(UART_TestCallback, uart);
+	Debug::AssignDebugCOM((void*)uart);
 
-	uint8_t TestMessage[] = "This is a test =  \n";
+	IO * led = new IO(GPIOC, GPIO_PIN_6);
+	Encoder * encoder = new Encoder(Encoder::TIMER4);
+
 	while (1)
 	{
-		uart->WriteBlocking(TestMessage, sizeof(TestMessage)-1);
-		uart->WaitForNewData();
-		TestMessage[sizeof(TestMessage)-3] = uart->Read();
-		//osDelay(100);
+		Debug::printf("Encoder = %d\n", encoder->Get());
+		osDelay(100);
 	}
 
 #if 0
