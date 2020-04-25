@@ -25,6 +25,7 @@
 #include "UART.h"
 #include "IO.h"
 #include "Encoder.h"
+#include "CANBus.h"
 
 /* Include Drivers */
 
@@ -39,6 +40,7 @@
 #include <vector>
 
 void UART_TestCallback(void * param, uint8_t * buffer, uint32_t bufLen);
+void CAN_Callback(void * param, const CANBus::package_t& package);
 
 void MainTask(void * pvParameters)
 {
@@ -59,10 +61,15 @@ void MainTask(void * pvParameters)
 	IO * led = new IO(GPIOC, GPIO_PIN_6);
 	Encoder * encoder = new Encoder(Encoder::TIMER4);
 
+	CANBus * can = new CANBus();
+	can->registerCallback(0x55, CAN_Callback, uart);
+
 	while (1)
 	{
-		Debug::printf("Encoder = %d\n", encoder->Get());
-		osDelay(100);
+		int32_t encoderValue = encoder->Get();
+		Debug::printf("Encoder = %d\n", encoderValue);
+		can->Transmit(0x01, (uint8_t *)&encoderValue, sizeof(encoderValue));
+		osDelay(1000);
 	}
 
 #if 0
@@ -105,6 +112,14 @@ void UART_TestCallback(void * param, uint8_t * buffer, uint32_t bufLen)
 {
 	UART * uart = (UART*)param;
 	uart->WriteBlocking(buffer, bufLen);
+	uart->Write('\n');
+}
+
+void CAN_Callback(void * param, const CANBus::package_t& package)
+{
+	UART * uart = (UART*)param;
+	Debug::print("Received CAN package with content: ");
+	uart->WriteBlocking((uint8_t *)package.Data, package.DataLength);
 	uart->Write('\n');
 }
 

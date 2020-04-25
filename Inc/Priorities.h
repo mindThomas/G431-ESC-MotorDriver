@@ -30,6 +30,7 @@
 #define ADC_DMA_INTERRUPT_PRIORITY		15
 
 // Below are periphiral priorities which uses FreeRTOS functions
+#define CAN_INTERRUPT_PRIORITY		5
 #define UART_INTERRUPT_PRIORITY		6
 #define SPI_INTERRUPT_PRIORITY		7
 #define I2C_INTERRUPT_PRIORITY		8
@@ -48,6 +49,7 @@
 #define CPULOAD_PRIORITY				1
 #define DEBUG_MESSAGE_PRIORITY			4
 #define SPEED_CONTROLLER_PRIORITY		6
+#define CAN_RECEIVER_PRIORITY			9
 #define UART_RECEIVER_PRIORITY			10
 #define LSPC_RECEIVER_PRIORITY			11
 #define LSPC_TRANSMITTER_PRIORITY		13  // important that this has the highest priority

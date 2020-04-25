@@ -1570,35 +1570,3 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE END Callback 1 */
 }
 
-void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
-{
-	FDCAN_RxHeaderTypeDef Header;
-	uint8_t Data[64] = {0};
-	HAL_FDCAN_GetRxMessage(&hfdcan1, FDCAN_RX_FIFO0, &Header, Data);
-
-	if (Header.IdType == FDCAN_STANDARD_ID) {
-		volatile uint32_t PackageID = Header.Identifier;
-		volatile uint8_t PackageLength = 0;
-
-		switch (Header.DataLength)
-		{
-			case FDCAN_DLC_BYTES_0: PackageLength = 0; break;
-			case FDCAN_DLC_BYTES_1: PackageLength = 1; break;
-			case FDCAN_DLC_BYTES_2: PackageLength = 2; break;
-			case FDCAN_DLC_BYTES_3: PackageLength = 3; break;
-			case FDCAN_DLC_BYTES_4: PackageLength = 4; break;
-			case FDCAN_DLC_BYTES_5: PackageLength = 5; break;
-			case FDCAN_DLC_BYTES_6: PackageLength = 6; break;
-			case FDCAN_DLC_BYTES_7: PackageLength = 7; break;
-			case FDCAN_DLC_BYTES_8: PackageLength = 8; break;
-			case FDCAN_DLC_BYTES_12: PackageLength = 12; break;
-			case FDCAN_DLC_BYTES_16: PackageLength = 16; break;
-			case FDCAN_DLC_BYTES_20: PackageLength = 20; break;
-			case FDCAN_DLC_BYTES_24: PackageLength = 24; break;
-			case FDCAN_DLC_BYTES_32: PackageLength = 32; break;
-			case FDCAN_DLC_BYTES_48: PackageLength = 48; break;
-			case FDCAN_DLC_BYTES_64: PackageLength = 64; break;
-			default: break;
-		}
-	}
-}
