@@ -26,6 +26,7 @@
 #include "IO.h"
 #include "Encoder.h"
 #include "CANBus.h"
+#include "Timer.h"
 
 /* Include Drivers */
 
@@ -41,6 +42,7 @@
 
 void UART_TestCallback(void * param, uint8_t * buffer, uint32_t bufLen);
 void CAN_Callback(void * param, const CANBus::package_t& package);
+void Timer_Callback(void * param);
 
 void MainTask(void * pvParameters)
 {
@@ -63,6 +65,9 @@ void MainTask(void * pvParameters)
 
 	CANBus * can = new CANBus();
 	can->registerCallback(0x55, CAN_Callback, uart);
+
+	Timer * timer = new Timer(Timer::TIMER6, 10000);
+	timer->RegisterInterruptSoft(5, Timer_Callback, led);
 
 	while (1)
 	{
@@ -121,6 +126,12 @@ void CAN_Callback(void * param, const CANBus::package_t& package)
 	Debug::print("Received CAN package with content: ");
 	uart->WriteBlocking((uint8_t *)package.Data, package.DataLength);
 	uart->Write('\n');
+}
+
+void Timer_Callback(void * param)
+{
+	IO * led = (IO*)param;
+	led->Toggle();
 }
 
 void Reboot_Callback(void * param, const std::vector<uint8_t>& payload)
