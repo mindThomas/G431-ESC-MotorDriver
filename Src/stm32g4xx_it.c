@@ -24,54 +24,28 @@
 #include "FreeRTOS.h"
 #include "task.h"
 /* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
-/* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
-/* USER CODE BEGIN TD */
-
-/* USER CODE END TD */
 
 /* Private define ------------------------------------------------------------*/
-/* USER CODE BEGIN PD */
- 
-/* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
-/* USER CODE BEGIN PM */
-
-/* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-/* USER CODE BEGIN PV */
+struct xREGISTER_STACK {
+	uint32_t spare0[ 8 ];
+	uint32_t r0;
+	uint32_t r1;
+	uint32_t r2;
+	uint32_t r3;
+	uint32_t r12;
+	uint32_t lr; /* Link register. */
+	uint32_t pc; /* Program counter. */
+	uint32_t psr; /* Program status register. */
+	uint32_t spare1[ 8 ];
+};
 
-/* USER CODE END PV */
-
-/* Private function prototypes -----------------------------------------------*/
-/* USER CODE BEGIN PFP */
-
-/* USER CODE END PFP */
-
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
-
-/* USER CODE END 0 */
-
-/* External variables --------------------------------------------------------*/
-extern DMA_HandleTypeDef hdma_adc1;
-extern DMA_HandleTypeDef hdma_adc2;
-extern ADC_HandleTypeDef hadc1;
-extern ADC_HandleTypeDef hadc2;
-extern FDCAN_HandleTypeDef hfdcan1;
-extern TIM_HandleTypeDef htim1;
-extern TIM_HandleTypeDef htim4;
-extern DMA_HandleTypeDef hdma_usart2_rx;
-extern DMA_HandleTypeDef hdma_usart2_tx;
-extern TIM_HandleTypeDef htim15;
-
-/* USER CODE BEGIN EV */
-extern UART_HandleTypeDef huart2;
-/* USER CODE END EV */
+volatile struct xREGISTER_STACK *pxRegisterStack = NULL;
 
 /******************************************************************************/
 /*           Cortex-M4 Processor Interruption and Exception Handlers          */ 
@@ -87,21 +61,6 @@ void NMI_Handler(void)
   /* USER CODE BEGIN NonMaskableInt_IRQn 1 */
 
   /* USER CODE END NonMaskableInt_IRQn 1 */
-}
-
-/**
-  * @brief This function handles Hard fault interrupt.
-  */
-void HardFault_Handler(void)
-{
-  /* USER CODE BEGIN HardFault_IRQn 0 */
-
-  /* USER CODE END HardFault_IRQn 0 */
-  while (1)
-  {
-    /* USER CODE BEGIN W1_HardFault_IRQn 0 */
-    /* USER CODE END W1_HardFault_IRQn 0 */
-  }
 }
 
 /**
@@ -162,156 +121,134 @@ void DebugMon_Handler(void)
   /* USER CODE END DebugMonitor_IRQn 1 */
 }
 
-/******************************************************************************/
-/* STM32G4xx Peripheral Interrupt Handlers                                    */
-/* Add here the Interrupt Handlers for the used peripherals.                  */
-/* For the available peripheral interrupt handler names,                      */
-/* please refer to the startup file (startup_stm32g4xx.s).                    */
-/******************************************************************************/
 
-/**
-  * @brief This function handles DMA1 channel1 global interrupt.
-  */
-void DMA1_Channel1_IRQHandler(void)
+#if 0
+void prvGetRegistersFromStack( uint32_t *pulFaultStackAddress )
 {
-  /* USER CODE BEGIN DMA1_Channel1_IRQn 0 */
+	/* 'pxRegisterStack' can be inspected in a break-point. */
+		pxRegisterStack = ( struct xREGISTERSTACK *)
+			( pulFaultStackAddress - 8 );
 
-  /* USER CODE END DMA1_Channel1_IRQn 0 */
-  HAL_DMA_IRQHandler(&hdma_adc1);
-  /* USER CODE BEGIN DMA1_Channel1_IRQn 1 */
+	// Check the Link Return (LR) address to find the function pointer where the code was executing before the crash
 
-  /* USER CODE END DMA1_Channel1_IRQn 1 */
+    /* When the following line is hit, the variables contain the register values. */
+    for( ;; );
 }
 
 /**
-  * @brief This function handles DMA1 channel2 global interrupt.
+  * @brief This function handles Hard fault interrupt.
   */
-void DMA1_Channel2_IRQHandler(void)
+void HardFault_Handler(void)
 {
-  /* USER CODE BEGIN DMA1_Channel2_IRQn 0 */
+    __asm volatile
+    (
+        " tst lr, #4                                                \n"
+        " ite eq                                                    \n"
+        " mrseq r0, msp                                             \n"
+        " mrsne r0, psp                                             \n"
+        " ldr r1, [r0, #24]                                         \n"
+        " bl prvGetRegistersFromStack                               \n"
+    );
+}
+#endif
 
-  /* USER CODE END DMA1_Channel2_IRQn 0 */
-  HAL_DMA_IRQHandler(&hdma_adc2);
-  /* USER CODE BEGIN DMA1_Channel2_IRQn 1 */
-
-  /* USER CODE END DMA1_Channel2_IRQn 1 */
+/* The fault handler implementation calls a function called
+prvGetRegistersFromStack(). */
+void __attribute__( ( naked ) ) HardFault_Handler(void)
+{
+    __asm volatile
+    (
+        " tst lr, #4                                                \n"
+        " ite eq                                                    \n"
+        " mrseq r0, msp                                             \n"
+        " mrsne r0, psp                                             \n"
+        " ldr r1, [r0, #24]                                         \n"
+		" bl prvGetRegistersFromStack                               \n"
+        /*" ldr r2, handler2_address_const                            \n"
+        " bx r2                                                     \n"
+        " handler2_address_const: .word prvGetRegistersFromStack    \n"*/
+    );
 }
 
-/**
-  * @brief This function handles DMA1 channel3 global interrupt.
-  */
-void DMA1_Channel3_IRQHandler(void)
+void prvGetRegistersFromStack( uint32_t *pulFaultStackAddress )
 {
-  /* USER CODE BEGIN DMA1_Channel3_IRQn 0 */
+	/* These are volatile to try and prevent the compiler/linker optimising them
+	away as the variables never actually get used.  If the debugger won't show the
+	values of the variables, make them global my moving their declaration outside
+	of this function. */
+	volatile uint32_t r0;
+	volatile uint32_t r1;
+	volatile uint32_t r2;
+	volatile uint32_t r3;
+	volatile uint32_t r12;
+	volatile uint32_t lr; /* Link register. */
+	volatile uint32_t pc; /* Program counter. */
+	volatile uint32_t psr;/* Program status register. */
 
-  /* USER CODE END DMA1_Channel3_IRQn 0 */
-  HAL_DMA_IRQHandler(&hdma_usart2_rx);
-  /* USER CODE BEGIN DMA1_Channel3_IRQn 1 */
+    r0 = pulFaultStackAddress[ 0 ];
+    r1 = pulFaultStackAddress[ 1 ];
+    r2 = pulFaultStackAddress[ 2 ];
+    r3 = pulFaultStackAddress[ 3 ];
 
-  /* USER CODE END DMA1_Channel3_IRQn 1 */
+    r12 = pulFaultStackAddress[ 4 ];
+    lr = pulFaultStackAddress[ 5 ];
+    pc = pulFaultStackAddress[ 6 ];
+    psr = pulFaultStackAddress[ 7 ];
+
+    if (lr == 0) // no return address, probably a hard-fault due to reset back from DFU bootloader
+		NVIC_SystemReset();
+
+    /* When the following line is hit, the variables contain the register values. */
+    for( ;; );
 }
 
-/**
-  * @brief This function handles DMA1 channel4 global interrupt.
-  */
-void DMA1_Channel4_IRQHandler(void)
+void DisableHardware(void)
 {
-  /* USER CODE BEGIN DMA1_Channel4_IRQn 0 */
-
-  /* USER CODE END DMA1_Channel4_IRQn 0 */
-  HAL_DMA_IRQHandler(&hdma_usart2_tx);
-  /* USER CODE BEGIN DMA1_Channel4_IRQn 1 */
-
-  /* USER CODE END DMA1_Channel4_IRQn 1 */
+	__HAL_RCC_TIM1_CLK_DISABLE();
+	__HAL_RCC_TIM2_CLK_DISABLE();
+	__HAL_RCC_TIM3_CLK_DISABLE();
+	__HAL_RCC_TIM4_CLK_DISABLE();
+	__HAL_RCC_TIM6_CLK_DISABLE();
+	__HAL_RCC_TIM7_CLK_DISABLE();
+	__HAL_RCC_TIM8_CLK_DISABLE();
+	__HAL_RCC_TIM15_CLK_DISABLE();
+	__HAL_RCC_TIM16_CLK_DISABLE();
+	__HAL_RCC_TIM17_CLK_DISABLE();
+	__HAL_RCC_GPIOA_CLK_DISABLE();
+	__HAL_RCC_GPIOB_CLK_DISABLE();
+	__HAL_RCC_GPIOC_CLK_DISABLE();
+	__HAL_RCC_GPIOD_CLK_DISABLE();
+	__HAL_RCC_GPIOE_CLK_DISABLE();
+	__HAL_RCC_GPIOF_CLK_DISABLE();
+	__HAL_RCC_GPIOG_CLK_DISABLE();
+	__HAL_RCC_USART1_CLK_DISABLE();
+	__HAL_RCC_USART2_CLK_DISABLE();
+	__HAL_RCC_USART3_CLK_DISABLE();
+	__HAL_RCC_UART4_CLK_DISABLE();
+	__HAL_RCC_I2C1_CLK_DISABLE();
+	__HAL_RCC_I2C2_CLK_DISABLE();
+	__HAL_RCC_I2C3_CLK_DISABLE();
+	__HAL_RCC_SPI1_CLK_DISABLE();
+	__HAL_RCC_SPI2_CLK_DISABLE();
+	__HAL_RCC_SPI3_CLK_DISABLE();
 }
 
-/**
-  * @brief This function handles ADC1 and ADC2 global interrupt.
-  */
-void ADC1_2_IRQHandler(void)
+volatile signed char * StackOverflowTaskName;
+void vApplicationStackOverflowHook( TaskHandle_t xTask, signed char *pcTaskName )
 {
-  /* USER CODE BEGIN ADC1_2_IRQn 0 */
+    //Debug::printf("stack overflow in task id %lu, name: %s n", (uint32t)xTask, pcTaskName);
+	// pxCurrentTCB contains a pointer to the currently running task
 
-  /* USER CODE END ADC1_2_IRQn 0 */
-  HAL_ADC_IRQHandler(&hadc1);
-  HAL_ADC_IRQHandler(&hadc2);
-  /* USER CODE BEGIN ADC1_2_IRQn 1 */
+	StackOverflowTaskName = pcTaskName;
 
-  /* USER CODE END ADC1_2_IRQn 1 */
+	DisableHardware();
+    for( ;; );
 }
 
-/**
-  * @brief This function handles FDCAN1 interrupt 0.
-  */
-void FDCAN1_IT0_IRQHandler(void)
+void vApplicationMallocFailedHook( void )
 {
-  /* USER CODE BEGIN FDCAN1_IT0_IRQn 0 */
-
-  /* USER CODE END FDCAN1_IT0_IRQn 0 */
-  HAL_FDCAN_IRQHandler(&hfdcan1);
-  /* USER CODE BEGIN FDCAN1_IT0_IRQn 1 */
-
-  /* USER CODE END FDCAN1_IT0_IRQn 1 */
-}
-
-/**
-  * @brief This function handles FDCAN1 interrupt 1.
-  */
-void FDCAN1_IT1_IRQHandler(void)
-{
-  /* USER CODE BEGIN FDCAN1_IT1_IRQn 0 */
-
-  /* USER CODE END FDCAN1_IT1_IRQn 0 */
-  HAL_FDCAN_IRQHandler(&hfdcan1);
-  /* USER CODE BEGIN FDCAN1_IT1_IRQn 1 */
-
-  /* USER CODE END FDCAN1_IT1_IRQn 1 */
-}
-
-/**
-  * @brief This function handles TIM1 update interrupt and TIM16 global interrupt.
-  */
-void TIM1_UP_TIM16_IRQHandler(void)
-{
-  /* USER CODE BEGIN TIM1_UP_TIM16_IRQn 0 */
-
-  /* USER CODE END TIM1_UP_TIM16_IRQn 0 */
-  HAL_TIM_IRQHandler(&htim1);
-  /* USER CODE BEGIN TIM1_UP_TIM16_IRQn 1 */
-
-  /* USER CODE END TIM1_UP_TIM16_IRQn 1 */
-}
-
-/**
-  * @brief This function handles TIM4 global interrupt.
-  */
-void TIM4_IRQHandler(void)
-{
-  /* USER CODE BEGIN TIM4_IRQn 0 */
-
-  /* USER CODE END TIM4_IRQn 0 */
-  HAL_TIM_IRQHandler(&htim4);
-  /* USER CODE BEGIN TIM4_IRQn 1 */
-
-  /* USER CODE END TIM4_IRQn 1 */
-}
-
-/* USER CODE BEGIN 1 */
-/**
-  * @brief This function handles TIM1 update interrupt and TIM16 global interrupt.
-  */
-void TIM1_CC_IRQHandler(void)
-{
-  HAL_TIM_IRQHandler(&htim1);
-}
-
-void USART2_IRQHandler(void)
-{
-    /* Check for IDLE line interrupt */
-    if (__HAL_UART_GET_IT_SOURCE(&huart2, UART_IT_IDLE) && __HAL_UART_GET_IT(&huart2, UART_IT_IDLE)) {
-    	__HAL_UART_CLEAR_IDLEFLAG(&huart2); // Clear IDLE line flag
-        USART_RX_Check(); // Check for data to process
-    }
+	DisableHardware();
+	for( ;; );
 }
 /* USER CODE END 1 */
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

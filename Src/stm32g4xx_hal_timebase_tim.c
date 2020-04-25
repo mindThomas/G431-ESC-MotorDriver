@@ -22,6 +22,10 @@
 #include "stm32g4xx_hal.h"
 #include "stm32g4xx_hal_tim.h"
  
+#ifdef USE_FREERTOS
+#include "cmsis_os.h"
+#endif 
+ 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
@@ -159,6 +163,12 @@ float HAL_toc(uint32_t timerPrev)
 	return microsTime;
 }
 
+#ifdef USE_FREERTOS
+void HAL_Delay(uint32_t Delay)
+{
+	osDelay(Delay);
+}
+#else
 void HAL_Delay(uint32_t Delay)
 {
   uint32_t tickstart = HAL_GetTick();
@@ -176,6 +186,7 @@ void HAL_Delay(uint32_t Delay)
   {
   }
 }
+#endif
 
 void HAL_DelayHighRes(uint32_t Delay)
 {
