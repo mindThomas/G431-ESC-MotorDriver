@@ -168,11 +168,6 @@
 			<locationURI>PARENT-2-PROJECT_LOC/Src/tmp_main.c</locationURI>
 		</link>
 		<link>
-			<name>Src/tmp_stm32g4xx_it.c</name>
-			<type>1</type>
-			<locationURI>PARENT-2-PROJECT_LOC/Src/tmp_stm32g4xx_it.c</locationURI>
-		</link>
-		<link>
 			<name>Middlewares/FreeRTOS/cmsis_os.c</name>
 			<type>1</type>
 			<locationURI>PARENT-2-PROJECT_LOC/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS/cmsis_os.c</locationURI>

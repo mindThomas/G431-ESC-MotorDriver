@@ -222,14 +222,15 @@ uint32_t HAL_GetTick(void)
   */
 void TIM1_BRK_TIM15_IRQHandler(void)
 {
-  /* USER CODE BEGIN TIM1_BRK_TIM15_IRQn 0 */
-
-  /* USER CODE END TIM1_BRK_TIM15_IRQn 0 */
-  //HAL_TIM_IRQHandler(&htim1);
-  HAL_TIM_IRQHandler(&htim15);
-  /* USER CODE BEGIN TIM1_BRK_TIM15_IRQn 1 */
-
-  /* USER CODE END TIM1_BRK_TIM15_IRQn 1 */
+	/* TIM Update event */
+	if(__HAL_TIM_GET_FLAG(&htim15, TIM_FLAG_UPDATE) != RESET)
+	{
+		if(__HAL_TIM_GET_IT_SOURCE(&htim15, TIM_IT_UPDATE) !=RESET)
+		{
+			__HAL_TIM_CLEAR_IT(&htim15, TIM_IT_UPDATE);
+			HAL_IncTick();
+		}
+	}
 }
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

@@ -27,11 +27,15 @@
 #include "Encoder.h"
 #include "CANBus.h"
 #include "Timer.h"
+#include "SyncedPWMADC.h"
 
 /* Include Drivers */
 
 /* Include Module libraries */
 #include "Debug.h"
+
+/* Include Device libraries */
+#include "LSPC.hpp"
 
 /* Include Application-layer libraries */
 
@@ -42,6 +46,7 @@
 
 void UART_TestCallback(void * param, uint8_t * buffer, uint32_t bufLen);
 void CAN_Callback(void * param, const CANBus::package_t& package);
+void LSPC_Callback(void * param, const std::vector<uint8_t>& data);
 void Timer_Callback(void * param);
 
 void MainTask(void * pvParameters)
@@ -58,10 +63,14 @@ void MainTask(void * pvParameters)
 	 */
 
 	UART * uart = new UART(UART::PORT_UART2, 115200, 100, true);
-	Debug::AssignDebugCOM((void*)uart);
+	LSPC * lspc = new LSPC(uart, LSPC_RECEIVER_PRIORITY, LSPC_TRANSMITTER_PRIORITY);
+	//Debug::AssignDebugCOM((void*)uart);
 
 	IO * led = new IO(GPIOC, GPIO_PIN_6);
+	IO * debug = new IO(GPIOA, GPIO_PIN_15);
 	Encoder * encoder = new Encoder(Encoder::TIMER4);
+
+	lspc->registerCallback(0x02, LSPC_Callback, led);
 
 	CANBus * can = new CANBus();
 	can->registerCallback(0x55, CAN_Callback, uart);
@@ -69,11 +78,30 @@ void MainTask(void * pvParameters)
 	Timer * timer = new Timer(Timer::TIMER6, 10000);
 	timer->RegisterInterruptSoft(5, Timer_Callback, led);
 
+	SyncedPWMADC * motor = new SyncedPWMADC();
+	motor->Debug_SetSamplingPin(debug);
+	motor->SetSamplingInterval(10);
+	motor->SetTimerFrequencyAndDutyCycle_MiddleSampling(400, 0.99);
+	osDelay(2000);
+	motor->SetTimerFrequencyAndDutyCycle_MiddleSampling(400, 0);
+	osDelay(2000);
+	motor->SetTimerFrequencyAndDutyCycle_MiddleSampling(400, 0.99);
+	osDelay(2000);
+	motor->SetOperatingMode(SyncedPWMADC::COAST);
+	motor->SetTimerFrequencyAndDutyCycle_MiddleSampling(400, 0);
+
+	//motor->SetTimerFrequencyWith50pctDutyCycle(400, true);
+	//motor->ADC_ConfigureBackEMFSampling();
+	//motor->Timer_Configure(20000, 1000);
+	//motor->SetTimerFrequencyWith50pctDutyCycle(20000, true);
+	//motor->SetTimerFrequencyWith50pctDutyCycle(400, false);
+
 	while (1)
 	{
 		int32_t encoderValue = encoder->Get();
-		Debug::printf("Encoder = %d\n", encoderValue);
+		//Debug::printf("Encoder = %d\n", encoderValue);
 		can->Transmit(0x01, (uint8_t *)&encoderValue, sizeof(encoderValue));
+		lspc->TransmitAsync(0x01, (uint8_t *)&encoderValue, sizeof(encoderValue));
 		osDelay(1000);
 	}
 
@@ -126,6 +154,12 @@ void CAN_Callback(void * param, const CANBus::package_t& package)
 	Debug::print("Received CAN package with content: ");
 	uart->WriteBlocking((uint8_t *)package.Data, package.DataLength);
 	uart->Write('\n');
+}
+
+void LSPC_Callback(void * param, const std::vector<uint8_t>& data)
+{
+	IO * led = (IO*)param;
+	int32_t encoderValue = *((int32_t*)data.data());
 }
 
 void Timer_Callback(void * param)
