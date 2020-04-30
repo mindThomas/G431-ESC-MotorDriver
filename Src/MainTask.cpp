@@ -43,11 +43,21 @@
 #include <stdlib.h>
 #include <string.h>
 #include <vector>
+#include <math.h>
 
 void UART_TestCallback(void * param, uint8_t * buffer, uint32_t bufLen);
 void CAN_Callback(void * param, const CANBus::package_t& package);
-void LSPC_Callback(void * param, const std::vector<uint8_t>& data);
+void SetPWM_Callback(void * param, const std::vector<uint8_t>& data);
 void Timer_Callback(void * param);
+
+typedef struct {
+	uint32_t time;
+	int32_t value;
+} tx_data_t;
+
+SyncedPWMADC::Sample samples_vin[10];
+SyncedPWMADC::Sample samples_current[10];
+tx_data_t tx_data[10];
 
 void MainTask(void * pvParameters)
 {
@@ -62,7 +72,7 @@ void MainTask(void * pvParameters)
 	 * Basically anything related to starting the system should happen in this thread and NOT in the main() function !!!
 	 */
 
-	UART * uart = new UART(UART::PORT_UART2, 115200, 100, true);
+	UART * uart = new UART(UART::PORT_UART2, 460800, 100, true);
 	LSPC * lspc = new LSPC(uart, LSPC_RECEIVER_PRIORITY, LSPC_TRANSMITTER_PRIORITY);
 	//Debug::AssignDebugCOM((void*)uart);
 
@@ -70,25 +80,26 @@ void MainTask(void * pvParameters)
 	IO * debug = new IO(GPIOA, GPIO_PIN_15);
 	Encoder * encoder = new Encoder(Encoder::TIMER4);
 
-	lspc->registerCallback(0x02, LSPC_Callback, led);
-
 	CANBus * can = new CANBus();
 	can->registerCallback(0x55, CAN_Callback, uart);
 
 	Timer * timer = new Timer(Timer::TIMER6, 10000);
 	timer->RegisterInterruptSoft(5, Timer_Callback, led);
 
-	SyncedPWMADC * motor = new SyncedPWMADC();
+	SyncedPWMADC * motor = new SyncedPWMADC(5000);
 	motor->Debug_SetSamplingPin(debug);
 	motor->SetSamplingInterval(10);
-	motor->SetTimerFrequencyAndDutyCycle_MiddleSampling(400, 0.99);
-	osDelay(2000);
+	motor->SetDutyCycle_MiddleSamplingOnce(0.4);
+
+	lspc->registerCallback(0x01, SetPWM_Callback, motor);
+
+	/*osDelay(2000);
 	motor->SetTimerFrequencyAndDutyCycle_MiddleSampling(400, 0);
 	osDelay(2000);
 	motor->SetTimerFrequencyAndDutyCycle_MiddleSampling(400, 0.99);
 	osDelay(2000);
 	motor->SetOperatingMode(SyncedPWMADC::COAST);
-	motor->SetTimerFrequencyAndDutyCycle_MiddleSampling(400, 0);
+	motor->SetTimerFrequencyAndDutyCycle_MiddleSampling(400, 0);*/
 
 	//motor->SetTimerFrequencyWith50pctDutyCycle(400, true);
 	//motor->ADC_ConfigureBackEMFSampling();
@@ -96,13 +107,43 @@ void MainTask(void * pvParameters)
 	//motor->SetTimerFrequencyWith50pctDutyCycle(20000, true);
 	//motor->SetTimerFrequencyWith50pctDutyCycle(400, false);
 
+	/*
+	int32_t encoderValue = encoder->Get();
+	//Debug::printf("Encoder = %d\n", encoderValue);
+	can->Transmit(0x01, (uint8_t *)&encoderValue, sizeof(encoderValue));
+	*/
+
+	tx_data_t * test = new tx_data_t[10];
+
 	while (1)
 	{
-		int32_t encoderValue = encoder->Get();
-		//Debug::printf("Encoder = %d\n", encoderValue);
-		can->Transmit(0x01, (uint8_t *)&encoderValue, sizeof(encoderValue));
-		lspc->TransmitAsync(0x01, (uint8_t *)&encoderValue, sizeof(encoderValue));
-		osDelay(1000);
+		for (uint8_t i = 0; i < 10; i++) {
+			uint32_t timestamp = HAL_GetHighResTick();
+			samples_current[i] = motor->GetCurrent();
+			samples_vin[i] = motor->GetVin();
+
+			osDelay(1);
+		}
+
+		for (uint8_t i = 0; i < 10; i++) {
+			tx_data[i].time = samples_vin[i].Timestamp;
+			tx_data[i].value = (int32_t)(roundf(samples_vin[i].ValueON * 1000));
+		}
+		lspc->TransmitAsync(0x01, (uint8_t *)&tx_data, 10*sizeof(tx_data_t));
+
+		for (uint8_t i = 0; i < 10; i++) {
+			float current = (samples_current[i].ValueON-2.0571f) / 0.1371f;
+			tx_data[i].time = samples_current[i].Timestamp;
+			tx_data[i].value = (int32_t)(roundf(current * 1000));
+		}
+		lspc->TransmitAsync(0x02, (uint8_t *)&tx_data, 10*sizeof(tx_data_t));
+
+		for (uint8_t i = 0; i < 10; i++) {
+			float current = (samples_current[i].ValueOFF-2.0571f) / 0.1371f;
+			tx_data[i].time = samples_current[i].Timestamp;
+			tx_data[i].value = (int32_t)(roundf(current * 1000));
+		}
+		lspc->TransmitAsync(0x03, (uint8_t *)&tx_data, 10*sizeof(tx_data_t));
 	}
 
 #if 0
@@ -156,10 +197,14 @@ void CAN_Callback(void * param, const CANBus::package_t& package)
 	uart->Write('\n');
 }
 
-void LSPC_Callback(void * param, const std::vector<uint8_t>& data)
+void SetPWM_Callback(void * param, const std::vector<uint8_t>& data)
 {
-	IO * led = (IO*)param;
-	int32_t encoderValue = *((int32_t*)data.data());
+	SyncedPWMADC * motor = (SyncedPWMADC*)param;
+	if (data.size() == 2) {
+		int16_t duty = *((int16_t*)data.data());
+		float dutyCycle = (float)duty / 1000;
+		motor->SetDutyCycle_MiddleSamplingOnce(dutyCycle);
+	}
 }
 
 void Timer_Callback(void * param)
