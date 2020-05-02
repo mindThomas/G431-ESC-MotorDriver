@@ -47,17 +47,15 @@
 
 void UART_TestCallback(void * param, uint8_t * buffer, uint32_t bufLen);
 void CAN_Callback(void * param, const CANBus::package_t& package);
-void SetPWM_Callback(void * param, const std::vector<uint8_t>& data);
+void SetDutyCycle_Callback(void * param, const std::vector<uint8_t>& data);
+void SetFreq_Callback(void * param, const std::vector<uint8_t>& data);
 void Timer_Callback(void * param);
+
 
 typedef struct {
 	uint32_t time;
 	int32_t value;
 } tx_data_t;
-
-SyncedPWMADC::Sample samples_vin[10];
-SyncedPWMADC::Sample samples_current[10];
-tx_data_t tx_data[10];
 
 void MainTask(void * pvParameters)
 {
@@ -86,12 +84,15 @@ void MainTask(void * pvParameters)
 	Timer * timer = new Timer(Timer::TIMER6, 10000);
 	timer->RegisterInterruptSoft(5, Timer_Callback, led);
 
-	SyncedPWMADC * motor = new SyncedPWMADC(5000);
+	uint16_t PWM_freq = 5000;
+	uint16_t Sample_freq = 100;
+	SyncedPWMADC * motor = new SyncedPWMADC(PWM_freq);
 	motor->Debug_SetSamplingPin(debug);
-	motor->SetSamplingInterval(10);
-	motor->SetDutyCycle_MiddleSamplingOnce(0.4);
+	motor->SetSamplingInterval(PWM_freq/Sample_freq);
+	motor->SetDutyCycle_EndSampling(0.4);
 
-	lspc->registerCallback(0x01, SetPWM_Callback, motor);
+	lspc->registerCallback(0x01, SetDutyCycle_Callback, motor);
+	lspc->registerCallback(0x02, SetFreq_Callback, motor);
 
 	/*osDelay(2000);
 	motor->SetTimerFrequencyAndDutyCycle_MiddleSampling(400, 0);
@@ -113,37 +114,35 @@ void MainTask(void * pvParameters)
 	can->Transmit(0x01, (uint8_t *)&encoderValue, sizeof(encoderValue));
 	*/
 
-	tx_data_t * test = new tx_data_t[10];
+	tx_data_t TX_Vin[10];
+	tx_data_t TX_CurrentON[10];
+	tx_data_t TX_CurrentOFF[10];
+	SyncedPWMADC::Sample samples_vin;
+	SyncedPWMADC::Sample samples_current;
 
 	while (1)
 	{
 		for (uint8_t i = 0; i < 10; i++) {
-			uint32_t timestamp = HAL_GetHighResTick();
-			samples_current[i] = motor->GetCurrent();
-			samples_vin[i] = motor->GetVin();
+			motor->WaitForNewSample();
 
-			osDelay(1);
+			samples_current = motor->GetCurrent();
+			samples_vin = motor->GetVin();
+
+			TX_Vin[i].time = samples_vin.Timestamp;
+			TX_Vin[i].value = (int32_t)(roundf(samples_vin.ValueON * 1000));
+
+			float current = (samples_current.ValueON-2.0571f) / 0.1371f;
+			TX_CurrentON[i].time = samples_current.Timestamp;
+			TX_CurrentON[i].value = (int32_t)(roundf(current * 1000));
+
+			current = (samples_current.ValueOFF-2.0571f) / 0.1371f;
+			TX_CurrentOFF[i].time = samples_current.Timestamp;
+			TX_CurrentOFF[i].value = (int32_t)(roundf(current * 1000));
 		}
 
-		for (uint8_t i = 0; i < 10; i++) {
-			tx_data[i].time = samples_vin[i].Timestamp;
-			tx_data[i].value = (int32_t)(roundf(samples_vin[i].ValueON * 1000));
-		}
-		lspc->TransmitAsync(0x01, (uint8_t *)&tx_data, 10*sizeof(tx_data_t));
-
-		for (uint8_t i = 0; i < 10; i++) {
-			float current = (samples_current[i].ValueON-2.0571f) / 0.1371f;
-			tx_data[i].time = samples_current[i].Timestamp;
-			tx_data[i].value = (int32_t)(roundf(current * 1000));
-		}
-		lspc->TransmitAsync(0x02, (uint8_t *)&tx_data, 10*sizeof(tx_data_t));
-
-		for (uint8_t i = 0; i < 10; i++) {
-			float current = (samples_current[i].ValueOFF-2.0571f) / 0.1371f;
-			tx_data[i].time = samples_current[i].Timestamp;
-			tx_data[i].value = (int32_t)(roundf(current * 1000));
-		}
-		lspc->TransmitAsync(0x03, (uint8_t *)&tx_data, 10*sizeof(tx_data_t));
+		lspc->TransmitAsync(0x01, (uint8_t *)&TX_Vin, 10*sizeof(tx_data_t));
+		lspc->TransmitAsync(0x02, (uint8_t *)&TX_CurrentON, 10*sizeof(tx_data_t));
+		lspc->TransmitAsync(0x03, (uint8_t *)&TX_CurrentOFF, 10*sizeof(tx_data_t));
 	}
 
 #if 0
@@ -197,13 +196,27 @@ void CAN_Callback(void * param, const CANBus::package_t& package)
 	uart->Write('\n');
 }
 
-void SetPWM_Callback(void * param, const std::vector<uint8_t>& data)
+void SetDutyCycle_Callback(void * param, const std::vector<uint8_t>& data)
 {
 	SyncedPWMADC * motor = (SyncedPWMADC*)param;
 	if (data.size() == 2) {
 		int16_t duty = *((int16_t*)data.data());
 		float dutyCycle = (float)duty / 1000;
 		motor->SetDutyCycle_MiddleSamplingOnce(dutyCycle);
+	}
+}
+
+void SetFreq_Callback(void * param, const std::vector<uint8_t>& data)
+{
+	SyncedPWMADC * motor = (SyncedPWMADC*)param;
+	if (data.size() == 4) {
+		uint16_t* values = (uint16_t*)data.data();
+		uint16_t PWM_freq = values[0];
+		uint16_t Sample_freq = values[1];
+
+		motor->SetPWMFrequency(PWM_freq);
+		motor->SetSamplingInterval(PWM_freq/Sample_freq);
+		motor->SetDutyCycle_EndSampling(motor->GetCurrentDutyCycle());
 	}
 }
 
