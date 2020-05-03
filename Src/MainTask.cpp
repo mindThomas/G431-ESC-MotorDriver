@@ -50,6 +50,8 @@ void CAN_Callback(void * param, const CANBus::package_t& package);
 void SetDutyCycle_Callback(void * param, const std::vector<uint8_t>& data);
 void SetFreq_Callback(void * param, const std::vector<uint8_t>& data);
 void Timer_Callback(void * param);
+void SetOperatingMode_Callback(void * param, const std::vector<uint8_t>& data);
+void SetActiveInactive_Callback(void * param, const std::vector<uint8_t>& data);
 
 
 typedef struct {
@@ -98,6 +100,8 @@ void MainTask(void * pvParameters)
 
 	lspc->registerCallback(0x01, SetDutyCycle_Callback, motor);
 	lspc->registerCallback(0x02, SetFreq_Callback, motor);
+	lspc->registerCallback(0x03, SetOperatingMode_Callback, motor);
+	lspc->registerCallback(0x04, SetActiveInactive_Callback, motor);
 
 	/*osDelay(2000);
 	motor->SetTimerFrequencyAndDutyCycle_MiddleSampling(400, 0);
@@ -203,6 +207,46 @@ void SetFreq_Callback(void * param, const std::vector<uint8_t>& data)
 	}
 }
 
+void SetOperatingMode_Callback(void * param, const std::vector<uint8_t>& data)
+{
+	SyncedPWMADC * motor = (SyncedPWMADC*)param;
+	if (!motor) return;
+
+	if (data.size() == 1) {
+		if (data[0] == 0x00) //
+			motor->SetOperatingMode(SyncedPWMADC::BRAKE);
+		else if (data[0] == 0x01)
+			motor->SetOperatingMode(SyncedPWMADC::COAST);
+	}
+}
+
+void SetActiveInactive_Callback(void * param, const std::vector<uint8_t>& data)
+{
+	static bool active_state = true;
+	static float active_duty_cycle;
+	static SyncedPWMADC::OperatingMode_t active_mode;
+
+	SyncedPWMADC * motor = (SyncedPWMADC*)param;
+	if (!motor) return;
+
+	if (data.size() == 1) {
+		if (data[0] == 0x00 && active_state) {
+			active_mode = motor->GetOperatingMode();
+			active_duty_cycle = motor->GetCurrentDutyCycle();
+
+			motor->SetBemfRange(false);
+			motor->SetOperatingMode(SyncedPWMADC::COAST);
+			motor->SetDutyCycle_MiddleSamplingOnce(0.0f);
+			active_state = false;
+		}
+		else if (data[0] == 0x01 && !active_state) {
+			motor->SetOperatingMode(active_mode);
+			motor->SetDutyCycle_MiddleSamplingOnce(active_duty_cycle);
+			active_state = true;
+		}
+	}
+}
+
 void Timer_Callback(void * param)
 {
 	IO * led = (IO*)param;
@@ -214,3 +258,4 @@ void Reboot_Callback(void * param, const std::vector<uint8_t>& payload)
 	// ToDo: Need to check for magic key
 	NVIC_SystemReset();
 }
+
