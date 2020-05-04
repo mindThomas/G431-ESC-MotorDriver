@@ -94,6 +94,14 @@
 									<listOptionValue builtIn="false" value="../../../Drivers/CMSIS/DSP/Include"/>
 									<listOptionValue builtIn="false" value="../../../STM32-libraries/Modules/Debug"/>
 									<listOptionValue builtIn="false" value="../../../STM32-libraries/Misc/Matrix"/>
+									<listOptionValue builtIn="false" value="../../../STM32-libraries/Misc/Matrix/SVD"/>
+									<listOptionValue builtIn="false" value="../../../STM32-libraries/Misc/Matrix/SVD/2x2"/>
+									<listOptionValue builtIn="false" value="../../../STM32-libraries/Misc/Matrix/SVD/3x3"/>
+									<listOptionValue builtIn="false" value="../../../STM32-libraries/Misc/Matrix/SVD/4x4"/>
+									<listOptionValue builtIn="false" value="../../../STM32-libraries/Misc/Matrix/SVD/5x5"/>
+									<listOptionValue builtIn="false" value="../../../STM32-libraries/Misc/Matrix/SVD/6x6"/>
+									<listOptionValue builtIn="false" value="../../../STM32-libraries/Misc/Matrix/Determinant"/>
+									<listOptionValue builtIn="false" value="../../../STM32-libraries/Misc/Matrix/Inverse"/>
 									<listOptionValue builtIn="false" value="../../../STM32-libraries/Periphirals/STM32G4/UART"/>
 									<listOptionValue builtIn="false" value="../../../STM32-libraries/Devices/LSPC"/>
 									<listOptionValue builtIn="false" value="../../../STM32-libraries/Periphirals/STM32G4/CANBus"/>

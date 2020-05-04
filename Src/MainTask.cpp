@@ -40,6 +40,7 @@
 /* Include Application-layer libraries */
 
 /* Miscellaneous includes */
+#include "Matrix.hpp"
 #include <stdlib.h>
 #include <string.h>
 #include <vector>
