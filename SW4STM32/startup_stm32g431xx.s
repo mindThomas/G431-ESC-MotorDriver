@@ -94,6 +94,20 @@ LoopFillZerobss:
   cmp r2, r4
   bcc FillZerobss
 
+/* Zero fill the bss segment. */
+  ldr r2, =end
+  ldr r4, =_estack
+  movs r3, #0
+  b LoopFillZeroheap
+
+FillZeroheap:
+  str  r3, [r2]
+  adds r2, r2, #4
+
+LoopFillZeroheap:
+  cmp r2, r4
+  bcc FillZeroheap
+
 /* Call the clock system intitialization function.*/
     bl  SystemInit
 /* Call static constructors */

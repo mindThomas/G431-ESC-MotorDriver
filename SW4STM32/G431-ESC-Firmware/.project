@@ -138,6 +138,11 @@
 			<locationURI>PARENT-2-PROJECT_LOC/Src/freertos.c</locationURI>
 		</link>
 		<link>
+			<name>Src/heap_useNewlib.c</name>
+			<type>1</type>
+			<locationURI>PARENT-2-PROJECT_LOC/Src/heap_useNewlib.c</locationURI>
+		</link>
+		<link>
 			<name>Src/main.c</name>
 			<type>1</type>
 			<locationURI>PARENT-2-PROJECT_LOC/Src/main.c</locationURI>
@@ -166,6 +171,21 @@
 			<name>Src/tmp_main.c</name>
 			<type>1</type>
 			<locationURI>PARENT-2-PROJECT_LOC/Src/tmp_main.c</locationURI>
+		</link>
+		<link>
+			<name>Drivers/CMSIS/DSP</name>
+			<type>2</type>
+			<locationURI>PARENT-2-PROJECT_LOC/Drivers/CMSIS/DSP</locationURI>
+		</link>
+		<link>
+			<name>Drivers/CMSIS/Include</name>
+			<type>2</type>
+			<locationURI>PARENT-2-PROJECT_LOC/Drivers/CMSIS/Include</locationURI>
+		</link>
+		<link>
+			<name>Drivers/CMSIS/Lib</name>
+			<type>2</type>
+			<locationURI>PARENT-2-PROJECT_LOC/Drivers/CMSIS/Lib</locationURI>
 		</link>
 		<link>
 			<name>Middlewares/FreeRTOS/cmsis_os.c</name>
