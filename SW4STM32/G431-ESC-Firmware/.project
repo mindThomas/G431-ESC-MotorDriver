@@ -33,6 +33,11 @@
 			<locationURI>PARENT-2-PROJECT_LOC/STM32-libraries/.git</locationURI>
 		</link>
 		<link>
+			<name>Libraries</name>
+			<type>2</type>
+			<locationURI>PARENT-2-PROJECT_LOC/Libraries</locationURI>
+		</link>
+		<link>
 			<name>STM32-libraries</name>
 			<type>2</type>
 			<locationURI>PARENT-2-PROJECT_LOC/STM32-libraries</locationURI>

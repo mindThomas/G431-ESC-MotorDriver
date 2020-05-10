@@ -25,6 +25,7 @@
 #include "ProcessorInit.h"
 #include "MemoryManagement.h"
 #include "Priorities.h"
+#include "MATLABCoderInit.h"
 
 /* Private variables ---------------------------------------------------------*/
 TaskHandle_t mainTaskHandle;
@@ -41,6 +42,8 @@ int main(void)
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
+
+  MATLABCoder_initialize();
 
   /* Create the main thread which creates objects and spawns the rest of the threads */
   xTaskCreate(MainTask, "mainTask", 1024, (void*) NULL, MAIN_TASK_PRIORITY, &mainTaskHandle);
