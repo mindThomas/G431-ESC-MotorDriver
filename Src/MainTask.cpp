@@ -46,10 +46,12 @@
 
 /* Miscellaneous includes */
 #include "Matrix.hpp"
+#include "MathLib.h"
 #include "LeastSquares.h"
 #include "NonlinearLeastSquares.hpp"
 
-
+void CPU_Load(void * pvParameters);
+void TaskRunTimeStats( char *pcWriteBuffer );
 void UART_TestCallback(void * param, uint8_t * buffer, uint32_t bufLen);
 void CAN_Callback(void * param, const CANBus::package_t& package);
 void SetDutyCycle_Callback(void * param, const std::vector<uint8_t>& data);
@@ -62,13 +64,23 @@ void StartFrequencySweep_Callback(void * param, const std::vector<uint8_t>& data
 void FrequencySweepThread(void * pvParameters);
 void StartDutySweep_Callback(void * param, const std::vector<uint8_t>& data);
 void DutySweepThread(void * pvParameters);
+void StartSampleLocationSweep_Callback(void * param, const std::vector<uint8_t>& data);
+void SampleLocationSweepThread(void * pvParameters);
 void TestFitExponentialDecay(void);
 
 typedef enum {
 	NONE,
 	CURRENT,
 	VBUS,
-	BEMF
+	BEMF,
+	// See "Motor Parameter Estimation steps" in "Estimator designs"
+	Ke,
+	R_Ke,
+	R_L,
+	L,
+	R_L_Ke,
+	B_tau_c,
+	J
 } calibrationMode;
 calibrationMode currentCalibrationMode = NONE;
 SemaphoreHandle_t captureCalibrationSamples;
@@ -82,7 +94,6 @@ uint32_t calibration_captured_samples = 0;
 uint32_t calibration_max_samples = 0;
 float calibration_BemfHighRangeValue = 0, calibration_BemfLowRangeValue = 0;
 LineFitting * calibration_lsq = 0;
-
 void Calibration_Callback(void * param, const std::vector<uint8_t>& data);
 
 typedef struct {
@@ -91,6 +102,12 @@ typedef struct {
 } tx_data_t;
 
 bool reset_tx_packing = true;
+
+bool CurrentControllerEnabled = false;
+float CurrentSetpoint = 0.0f;
+void SetCurrentSetpoint_Callback(void * param, const std::vector<uint8_t>& data);
+void StartCurrentController_Callback(SyncedPWMADC * motor);
+void CurrentControllerThread(void * pvParameters);
 
 void MainTask(void * pvParameters)
 {
@@ -104,10 +121,12 @@ void MainTask(void * pvParameters)
 	 *
 	 * Basically anything related to starting the system should happen in this thread and NOT in the main() function !!!
 	 */
-
-	UART * uart = new UART(UART::PORT_UART2, 921600, 100, true);
+	UART * uart = new UART(UART::PORT_UART2, 1612800, 100, true);
 	LSPC * lspc = new LSPC(uart, LSPC_RECEIVER_PRIORITY, LSPC_TRANSMITTER_PRIORITY);
 	Debug::AssignDebugCOM((void*)lspc);
+
+	/*TaskHandle_t CPULoadTaskHandle;
+	xTaskCreate(CPU_Load, (char *)"CPU Load", 256, (void*) lspc, CPULOAD_PRIORITY, &CPULoadTaskHandle);*/
 
 	IO * led = new IO(GPIOC, GPIO_PIN_6);
 	IO * debug = new IO(GPIOA, GPIO_PIN_15);
@@ -137,6 +156,8 @@ void MainTask(void * pvParameters)
 	lspc->registerCallback(0x06, StartFrequencySweep_Callback, motor);
 	lspc->registerCallback(0x07, StartDutySweep_Callback, motor);
 	lspc->registerCallback(0x08, Calibration_Callback, motor);
+	lspc->registerCallback(0x09, StartSampleLocationSweep_Callback, motor);
+	lspc->registerCallback(0x0A, SetCurrentSetpoint_Callback, motor);
 	captureCalibrationSamples = xSemaphoreCreateBinary();
 
 	/*osDelay(2000);
@@ -160,6 +181,8 @@ void MainTask(void * pvParameters)
 	*/
 
 	SyncedPWMADC::CombinedSample_t sample;
+	uint8_t * TX_Buffer = (uint8_t*)pvPortMalloc(LSPC_MAXIMUM_PACKAGE_LENGTH);
+	uint16_t TX_Buffer_WritePos = 0;
 
 	while (1)
 	{
@@ -221,22 +244,57 @@ void MainTask(void * pvParameters)
 			}
 		}
 
+#if 0 // 1 = do not pack data
 		if ( xQueueReceive( motor->SampleQueue, &sample, ( TickType_t ) portMAX_DELAY ) == pdPASS ) {
 			while (1) {
-				if (lspc->TransmitAsync(0x04, (uint8_t *)&sample, sizeof(SyncedPWMADC::CombinedSample_t)-1)) { // minus 1 because of the extra internal variable boolean
+				if (lspc->TransmitAsync(0x04, (uint8_t*)&sample, sizeof(SyncedPWMADC::CombinedSample_t)-1)) {
 					break;
 				}
 				osDelay(1);
 			}
 		}
+#else
+		// Pack data before sending
+		while (true) {
+			if ((TX_Buffer_WritePos + sizeof(SyncedPWMADC::CombinedSample_t)-1) < LSPC_MAXIMUM_PACKAGE_LENGTH) {
+				if ( xQueueReceive( motor->SampleQueue, &sample, ( TickType_t ) portMAX_DELAY ) == pdPASS ) {
+					memcpy(&TX_Buffer[TX_Buffer_WritePos], (uint8_t*)&sample, sizeof(SyncedPWMADC::CombinedSample_t)-1);
+					TX_Buffer_WritePos += sizeof(SyncedPWMADC::CombinedSample_t)-1; // minus 1 because of the extra internal variable boolean
+				} else {
+					break;
+				}
+			} else {
+				break;
+			}
+		}
+		if (TX_Buffer_WritePos > 0) {
+			while (1) {
+				if (lspc->TransmitAsync(0x04, TX_Buffer, TX_Buffer_WritePos)) {
+					TX_Buffer_WritePos = 0;
+					break;
+				} else {
+					osDelay(1);
+				}
+			}
+		}
+#endif
 	}
 
-#if 0
-	/* Send CPU load every second */
-	char * pcWriteBuffer = (char *)pvPortMalloc(100);
 	while (1)
 	{
-		vTaskGetRunTimeStats(pcWriteBuffer);
+		vTaskSuspend(NULL); // suspend this task
+	}
+}
+
+void CPU_Load(void * pvParameters)
+{
+	LSPC * lspc = (LSPC*)pvParameters;
+
+	/* Send CPU load every second */
+	char * pcWriteBuffer = (char *)pvPortMalloc(500); // Approx 40 bytes pr. task
+	while (1)
+	{
+		TaskRunTimeStats(pcWriteBuffer);
 		char * endPtr = &pcWriteBuffer[strlen(pcWriteBuffer)];
 		*endPtr++ = '\n'; *endPtr++ = '\n'; *endPtr++ = 0;
 
@@ -245,7 +303,7 @@ void MainTask(void * pvParameters)
 		uint16_t remainingLength = strlen(pcWriteBuffer);
 		uint16_t txLength;
 
-		/*while (remainingLength > 0) {
+		while (remainingLength > 0) {
 			txLength = remainingLength;
 			if (txLength > LSPC_MAXIMUM_PACKAGE_LENGTH) {
 				txLength = LSPC_MAXIMUM_PACKAGE_LENGTH-1;
@@ -253,17 +311,91 @@ void MainTask(void * pvParameters)
 				if (txLength == 0) txLength = LSPC_MAXIMUM_PACKAGE_LENGTH;
 				else txLength++;
 			}
-			lspcUSB->TransmitAsync(lspc::MessageTypesToPC::CPUload, (uint8_t *)&pcWriteBuffer[txIdx], txLength);
+			lspc->TransmitAsync(lspc::MessageTypesToPC::CPUload, (uint8_t *)&pcWriteBuffer[txIdx], txLength);
 
 			txIdx += txLength;
 			remainingLength -= txLength;
-		}*/
-	}
-#endif
+		}
 
-	while (1)
+		osDelay(1000);
+	}
+}
+
+
+static char *WriteTaskNameToBuffer( char *pcBuffer, const char *pcTaskName )
+{
+	size_t x;
+
+	/* Start by copying the entire string. */
+	strcpy( pcBuffer, pcTaskName );
+
+	/* Pad the end of the string with spaces to ensure columns line up when
+	printed out. */
+	for( x = strlen( pcBuffer ); x < ( size_t ) ( configMAX_TASK_NAME_LEN - 1 ); x++ )
 	{
-		vTaskSuspend(NULL); // suspend this task
+		pcBuffer[ x ] = ' ';
+	}
+
+	/* Terminate. */
+	pcBuffer[ x ] = 0x00;
+
+	/* Return the new end of string. */
+	return &( pcBuffer[ x ] );
+}
+
+void TaskRunTimeStats( char *pcWriteBuffer )
+{
+	// Based on vTaskGetRunTimeStats
+	static TaskStatus_t *pxTaskStatusArrayPrev = 0;
+	static UBaseType_t uxArraySizePrev = 0;
+	static uint32_t ulTotalTimePrev = 0;
+
+	uint32_t ulTotalTime, ulStatsAsPercentage;
+	TaskStatus_t *pxTaskStatusArray;
+	UBaseType_t uxArraySize;
+
+	*pcWriteBuffer = 0x00; // ensure that we start clean
+
+	uxArraySize = uxTaskGetNumberOfTasks();
+	pxTaskStatusArray = (TaskStatus_t*)pvPortMalloc( uxArraySize * sizeof( TaskStatus_t ) );
+
+	if( pxTaskStatusArray != NULL )
+	{
+		uxArraySize = uxTaskGetSystemState( pxTaskStatusArray, uxArraySize, &ulTotalTime );
+
+		ulTotalTime /= 100UL; // For percentage calculations.
+
+		if( ulTotalTime > 0 && pxTaskStatusArrayPrev )
+		{
+			UBaseType_t x;
+			for( x = 0; x < uxArraySize; x++ )
+			{
+				ulStatsAsPercentage = (pxTaskStatusArray[ x ].ulRunTimeCounter - pxTaskStatusArrayPrev[ x ].ulRunTimeCounter) /
+									  (ulTotalTime - ulTotalTimePrev);
+
+				if (ulStatsAsPercentage > 100)
+					ulStatsAsPercentage = 0;
+
+				pcWriteBuffer = WriteTaskNameToBuffer( pcWriteBuffer, pxTaskStatusArray[ x ].pcTaskName );
+
+				if( ulStatsAsPercentage > 0UL )
+				{
+						sprintf( pcWriteBuffer, "\t%u\t\t%u%%\r\n", ( unsigned int ) pxTaskStatusArray[ x ].ulRunTimeCounter, ( unsigned int ) ulStatsAsPercentage );
+				}
+				else
+				{
+						sprintf( pcWriteBuffer, "\t%u\t\t<1%%\r\n", ( unsigned int ) pxTaskStatusArray[ x ].ulRunTimeCounter );
+				}
+
+				pcWriteBuffer += strlen( pcWriteBuffer );
+			}
+		}
+
+		if (pxTaskStatusArrayPrev)
+			vPortFree( pxTaskStatusArrayPrev );
+		pxTaskStatusArrayPrev = pxTaskStatusArray;
+		uxArraySizePrev = uxArraySize;
+		ulTotalTimePrev = ulTotalTime;
 	}
 }
 
@@ -278,7 +410,9 @@ void SetDutyCycle_Callback(void * param, const std::vector<uint8_t>& data)
 	if (data.size() == 2) {
 		int16_t duty = *((int16_t*)data.data());
 		float dutyCycle = (float)duty / 1000;
-		motor->SetDutyCycle_EndSampling(dutyCycle);
+		CurrentControllerEnabled = false;
+
+		motor->SetDutyCycle_MiddleSampling(dutyCycle);
 
 		reset_tx_packing = true;
 	}
@@ -292,9 +426,17 @@ void SetFreq_Callback(void * param, const std::vector<uint8_t>& data)
 		uint16_t PWM_freq = values[0];
 		uint16_t Sample_freq = values[1];
 
+		uint16_t interval = (uint16_t)roundf((float)PWM_freq/Sample_freq);
+		uint16_t resulting_sample_freq = PWM_freq / interval;
+		if (resulting_sample_freq > 2000) {
+			resulting_sample_freq = 2000; // limited by UART baud rate
+			interval = (uint16_t)floorf((float)PWM_freq/Sample_freq);
+		}
+
+		CurrentControllerEnabled = false;
 		motor->SetPWMFrequency(PWM_freq);
-		motor->SetSamplingInterval(PWM_freq/Sample_freq);
-		motor->SetDutyCycle_EndSampling(motor->GetCurrentDutyCycle());
+		motor->SetSamplingInterval(interval);
+		motor->SetDutyCycle_MiddleSampling(motor->GetCurrentDutyCycle());
 
 		reset_tx_packing = true;
 	}
@@ -307,6 +449,7 @@ void SetAveraging_Callback(void * param, const std::vector<uint8_t>& data)
 		uint16_t* values = (uint16_t*)data.data();
 		uint16_t AveragingCount = values[0];
 
+		CurrentControllerEnabled = false;
 		motor->SetNumberOfAveragingSamples(AveragingCount);
 	}
 }
@@ -315,6 +458,7 @@ void SetOperatingMode_Callback(void * param, const std::vector<uint8_t>& data)
 {
 	SyncedPWMADC * motor = (SyncedPWMADC*)param;
 	if (!motor) return;
+	CurrentControllerEnabled = false;
 
 	if (data.size() == 1) {
 		if (data[0] == 0x00) //
@@ -332,6 +476,7 @@ void SetActiveInactive_Callback(void * param, const std::vector<uint8_t>& data)
 
 	SyncedPWMADC * motor = (SyncedPWMADC*)param;
 	if (!motor) return;
+	CurrentControllerEnabled = false;
 
 	if (data.size() == 1) {
 		if (data[0] == 0x00 && active_state) {
@@ -374,6 +519,7 @@ void StartFrequencySweep_Callback(void * param, const std::vector<uint8_t>& data
 				return; // Frequency sweep task is already running
 			}
 		}
+		CurrentControllerEnabled = false;
 		xTaskCreate(FrequencySweepThread, (char *)"Frequency sweep", 256, (void*) motor, 6, &FrequencySweepTaskHandle);
 	}
 }
@@ -389,14 +535,69 @@ void FrequencySweepThread(void * pvParameters)
 	uint32_t freq = 250;
 	motor->SetPWMFrequency(freq); // configure prescaler using starting frequency
 	motor->WaitForNewQueuedSample();
-	while (freq <= 10000) {
+	freq = 250;
+	bool switch_sampling = false;
+	while (freq <= 5000)
+	{
+		if (freq >= 2500 && !switch_sampling)  {
+			motor->SetSamplingInterval(4);
+			motor->SetNumberOfAveragingSamples(1);
+			switch_sampling = true;
+		}
 		motor->SetPWMFrequency(freq, false);
-		motor->SetDutyCycle_EndSampling(0.5);
+		//motor->SetDutyCycle_EndSampling(0.5);
+		float duty_step = 0.4;
+		for (float duty = 0.1; duty < 0.91; duty += duty_step) {
+			motor->SetDutyCycle_CustomSampling(duty, duty-0.025, 0.975); // these sample locations also fulfills the "outside of ripple"-zone up to 5 KHz for 50% duty (for 30% duty the first will be 0.275)
+			for (uint8_t samples = 0; samples < 50; samples++)
+				motor->WaitForNewQueuedSample();
+		}
+		for (float duty = 0.9 - duty_step; duty > 0.09; duty -= duty_step) {
+			motor->SetDutyCycle_CustomSampling(duty, duty-0.025, 0.975); // these sample locations also fulfills the "outside of ripple"-zone up to 5 KHz for 50% duty (for 30% duty the first will be 0.275)
+			for (uint8_t samples = 0; samples < 50; samples++)
+				motor->WaitForNewQueuedSample();
+		}
+		freq += 100;
+	}
 
-		freq += 10;
+	motor->SetDutyCycle_EndSampling(0);
+	motor->SetPWMFrequency(250);
 
-		for (uint8_t samples = 0; samples < 20; samples++)
-			motor->WaitForNewQueuedSample();
+	vTaskDelete(NULL); // delete/stop this current task
+}
+
+void FrequencySweepThread2(void * pvParameters)
+{
+	SyncedPWMADC * motor = (SyncedPWMADC *)pvParameters;
+	motor->SetOperatingMode(SyncedPWMADC::BRAKE);
+	motor->SetSamplingInterval(2);
+	motor->SetNumberOfAveragingSamples(1);
+
+	uint32_t freq = 250;
+	bool switch_sampling = false;
+	motor->SetPWMFrequency(freq); // configure prescaler using starting frequency
+	motor->WaitForNewQueuedSample();
+	for (float duty = 0.1; duty < 0.91; duty += 0.1) {
+		freq = 250;
+		switch_sampling = false;
+		motor->SetSamplingInterval(2);
+		motor->SetNumberOfAveragingSamples(1);
+		while (freq <= 5000) {
+			if (freq >= 2500 && !switch_sampling)  {
+				motor->SetSamplingInterval(4);
+				motor->SetNumberOfAveragingSamples(1);
+				switch_sampling = true;
+			}
+
+			motor->SetPWMFrequency(freq, false);
+			//motor->SetDutyCycle_EndSampling(0.5);
+			motor->SetDutyCycle_CustomSampling(duty, duty-0.025, 0.975); // these sample locations also fulfills the "outside of ripple"-zone up to 5 KHz for 50% duty (for 30% duty the first will be 0.275)
+
+			for (uint8_t samples = 0; samples < 10; samples++)
+				motor->WaitForNewQueuedSample();
+
+			freq += 50;
+		}
 	}
 
 	motor->SetDutyCycle_EndSampling(0);
@@ -427,7 +628,8 @@ void StartDutySweep_Callback(void * param, const std::vector<uint8_t>& data)
 				return; // Frequency sweep task is already running
 			}
 		}
-		xTaskCreate(DutySweepThread, (char *)"Duty sweep", 256, (void*) motor, 6, &DutySweepTaskHandle);
+		CurrentControllerEnabled = false;
+		xTaskCreate(DutySweepThread, (char *)"Duty sweep", 256, (void*) motor, CALIBRATION_SWEEP_PRIORITY, &DutySweepTaskHandle);
 	}
 }
 
@@ -436,19 +638,97 @@ void DutySweepThread(void * pvParameters)
 {
 	SyncedPWMADC * motor = (SyncedPWMADC *)pvParameters;
 	motor->SetOperatingMode(SyncedPWMADC::BRAKE);
-	motor->SetSamplingInterval(2);
-	motor->SetNumberOfAveragingSamples(1);
 
-	uint32_t freq = 500;
+	bool OperatingFrequency = true;
+	uint32_t freq;
+	if (OperatingFrequency) {
+		freq = 10000;
+		motor->SetSamplingInterval(16);
+		motor->SetNumberOfAveragingSamples(1);
+	} else {
+		freq = 500;
+		motor->SetSamplingInterval(2);
+		motor->SetNumberOfAveragingSamples(1);
+	}
+
 	motor->SetPWMFrequency(freq); // configure prescaler using starting frequency
+	if (OperatingFrequency) motor->SetDutyCycle_MiddleSamplingOnce(0);
+	else motor->SetDutyCycle_EndSampling(0);
 	motor->WaitForNewQueuedSample();
 	for (float duty = 0.1; duty < 1.0; duty += 0.05) {
-		motor->SetDutyCycle_EndSampling(duty);
+		if (OperatingFrequency) motor->SetDutyCycle_MiddleSampling(duty);
+		else motor->SetDutyCycle_EndSampling(duty);
+		osDelay(500);
+	}
+	for (float duty = 0.9; duty > -1.0; duty -= 0.05) {
+		if (OperatingFrequency) motor->SetDutyCycle_MiddleSampling(duty);
+		else motor->SetDutyCycle_EndSampling(duty);
+		osDelay(500);
+	}
+	for (float duty = -0.9; duty < 1.0; duty += 0.05) {
+		if (OperatingFrequency) motor->SetDutyCycle_MiddleSampling(duty);
+		else motor->SetDutyCycle_EndSampling(duty);
+		osDelay(500);
+	}
+	for (float duty = 0.9; duty >= 0.1; duty -= 0.05) {
+		if (OperatingFrequency) motor->SetDutyCycle_MiddleSampling(duty);
+		else motor->SetDutyCycle_EndSampling(duty);
 		osDelay(500);
 	}
 
 	motor->SetDutyCycle_EndSampling(0);
 	motor->SetPWMFrequency(250);
+
+	vTaskDelete(NULL); // delete/stop this current task
+}
+
+void StartSampleLocationSweep_Callback(void * param, const std::vector<uint8_t>& data)
+{
+	SyncedPWMADC * motor = (SyncedPWMADC*)param;
+	if (data.size() == 0) {
+		TaskHandle_t SampleLocationSweepTaskHandle;
+	    // Obtain the handle of a task from its name.
+		SampleLocationSweepTaskHandle = xTaskGetHandle( "Sample location sweep" );
+
+		if (SampleLocationSweepTaskHandle != 0) {
+			TaskStatus_t xTaskDetails;
+
+			// Use the handle to obtain further information about the task.
+			vTaskGetInfo( SampleLocationSweepTaskHandle,
+						  &xTaskDetails,
+						  pdTRUE, // Include the high water mark in xTaskDetails.
+						  eInvalid ); // Include the task state in xTaskDetails.
+
+			if (xTaskDetails.eCurrentState != eDeleted && xTaskDetails.eCurrentState != eInvalid) {
+				return; // Frequency sweep task is already running
+			}
+		}
+		CurrentControllerEnabled = false;
+		xTaskCreate(SampleLocationSweepThread, (char *)"Sample location sweep", 256, (void*) motor, CALIBRATION_SWEEP_PRIORITY, &SampleLocationSweepTaskHandle);
+	}
+}
+
+void SampleLocationSweepThread(void * pvParameters)
+{
+	SyncedPWMADC * motor = (SyncedPWMADC *)pvParameters;
+	motor->SetOperatingMode(SyncedPWMADC::BRAKE);
+	//motor->SetPWMFrequency(200);
+	//motor->SetSamplingInterval(3);
+	//motor->SetNumberOfAveragingSamples(2);
+	motor->SetDutyCycle_EndSampling(0.5);
+
+	for (uint32_t freq = 200; freq <= 2000; freq += 200) {
+		motor->SetPWMFrequency(freq);
+		motor->SetSamplingInterval(3);
+		motor->SetNumberOfAveragingSamples(2);
+		motor->SetCustomSamplingLocations(0.02);
+		for (float sampleLocation = 0.04; sampleLocation <= 0.98; sampleLocation += 0.02) {
+			motor->WaitForNewQueuedSample();
+			motor->SetCustomSamplingLocations(sampleLocation);
+		}
+	}
+
+	motor->SetDutyCycle_EndSampling(0);
 
 	vTaskDelete(NULL); // delete/stop this current task
 }
@@ -719,4 +999,125 @@ void Calibration_Callback(void * param, const std::vector<uint8_t>& data)
 			xSemaphoreGive(captureCalibrationSamples);
 		}
 	}
+}
+
+void SetCurrentSetpoint_Callback(void * param, const std::vector<uint8_t>& data)
+{
+	SyncedPWMADC * motor = (SyncedPWMADC*)param;
+	if (data.size() == 2) {
+		int16_t currentSetpointRaw = *((int16_t*)data.data());
+		CurrentSetpoint = (float)currentSetpointRaw / 1000;
+
+		StartCurrentController_Callback(motor);
+	}
+}
+
+void StartCurrentController_Callback(SyncedPWMADC * motor)
+{
+	TaskHandle_t CurrentControllerTaskHandle;
+	// Obtain the handle of a task from its name.
+	CurrentControllerTaskHandle = xTaskGetHandle( "Current controller" );
+
+	if (CurrentControllerTaskHandle != 0) {
+		TaskStatus_t xTaskDetails;
+
+		// Use the handle to obtain further information about the task.
+		vTaskGetInfo( CurrentControllerTaskHandle,
+					  &xTaskDetails,
+					  pdTRUE, // Include the high water mark in xTaskDetails.
+					  eInvalid ); // Include the task state in xTaskDetails.
+
+		if (xTaskDetails.eCurrentState != eDeleted && xTaskDetails.eCurrentState != eInvalid) {
+			return; // Frequency sweep task is already running
+		}
+	}
+	xTaskCreate(CurrentControllerThread, (char *)"Current controller", 256, (void*) motor, CURRENT_CONTROLLER_PRIORITY, &CurrentControllerTaskHandle);
+}
+
+void CurrentControllerThread(void * pvParameters)
+{
+	SyncedPWMADC * motor = (SyncedPWMADC *)pvParameters;
+	motor->SetOperatingMode(SyncedPWMADC::BRAKE);
+	motor->SetPWMFrequency(20000);
+	motor->SetSamplingInterval(20);
+	motor->SetNumberOfAveragingSamples(18);
+	motor->SetDutyCycle_MiddleSamplingOnce(0.0f);
+
+	SyncedPWMADC::CombinedSample_t sample = motor->GetLatestSample();
+	uint32_t prev_encoder = sample.Encoder;
+	float prev_time = sample.Timestamp;
+
+	CurrentControllerEnabled = true;
+	while (CurrentControllerEnabled)
+	{
+		motor->WaitForNewQueuedSample();
+		sample = motor->GetLatestSample();
+
+		// Average current
+		// Vmot = R*i + Ke*omega
+		// duty*Vin = R*i + Ke*omega
+		// duty = 1/Vin * (R*i + Ke*omega)
+		// including current error term
+		// duty = 1/Vin * (R*i_setpoint + Ke*omega) - R/Vin*(i_meas-i_setpoint)
+		// duty = 1/Vin * (R*i_setpoint + Ke*omega) - Kp*i_err
+		//    Kp = R/Vin
+		//    i_err = i_meas - i_setpoint
+		/*if (motor->Samples.Encoder.Updated &&
+			motor->Samples.Vbus.Updated &&
+			motor->Samples.CurrentSense)*/
+		if ( CurrentControllerEnabled && (sample.Current.ON != 0 || sample.Current.OFF != 0) && (sample.VbusON != 0 || sample.VbusOFF != 0) )
+		{
+			float current = 0;
+			float vin = 0;
+			if (fabsf(sample.Current.ON) > fabsf(sample.Current.OFF)) {
+				current = sample.Current.ON;
+				vin = sample.VbusON;
+			} else {
+				current = sample.Current.OFF;
+				vin = sample.VbusOFF;
+			}
+
+			uint32_t encoder = sample.Encoder;
+			float time = sample.Timestamp / 100000.f;
+
+			int32_t delta_encoder = encoder - prev_encoder;
+			float delta_time = time - prev_time;
+
+			float omega = M_2PI * ((float)delta_encoder / motor->MotorParameters.TicksAfterGearing) / delta_time;
+
+			float duty = 0;
+			if (fabs(CurrentSetpoint) > 0) {
+				duty += 1/vin * (motor->MotorParameters.R*CurrentSetpoint + motor->MotorParameters.Ke*omega);
+			}
+
+			if ((CurrentSetpoint > 0 && duty < 0) ||
+				(CurrentSetpoint < 0 && duty > 0))
+			{
+				duty = 0.0f;
+			}
+
+			float i_err = current - CurrentSetpoint;
+			const float Kp = 2.5;
+			duty -= Kp * motor->MotorParameters.R/vin * i_err;
+			if ((CurrentSetpoint > 0 && duty < 0) ||
+				(CurrentSetpoint < 0 && duty > 0))
+			{
+				duty = 0.0f;
+			}
+			if (duty > 1.0f) {
+				duty = 1.0f;
+			} else if (duty < -1.0f) {
+				duty = -1.0f;
+			}
+
+			motor->SetDutyCycle_MiddleSamplingOnce(duty);
+
+			prev_encoder = encoder;
+			prev_time = time;
+		}
+	}
+
+	//motor->SetDutyCycle_MiddleSampling(0.0f);
+
+	vTaskDelete(NULL); // delete/stop this current task
 }

@@ -95,7 +95,7 @@ __weak void configureTimerForRunTimeStats(void)
 
 }
 
-unsigned long getRunTimeCounterValue(void)
+inline unsigned long getRunTimeCounterValue(void)
 {
 	return HAL_GetHighResTick();
 }
