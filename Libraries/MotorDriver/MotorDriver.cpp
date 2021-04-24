@@ -14,37 +14,17 @@
  * Web      :  http://www.tkjelectronics.dk
  * e-mail   :  thomasj@tkjelectronics.dk
  * ------------------------------------------
- */ 
+ */
 
-#ifndef MAIN_TASK_H
-#define MAIN_TASK_H
+#include "MotorDriver.h"
 
-#include <stdint.h>
+MotorDriver::MotorDriver(uint32_t frequency, float maxDuty)
+	: SyncedPWMADC(frequency, maxDuty)
+{
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-typedef struct __attribute__((__packed__)) {
-	uint32_t Timestamp;
-
-	float current_setpoint;
-	float current_measurement;
-	float current_filtered;
-
-	float omega_measurement;
-	float omega_filtered;
-
-	float integral;
-	float PI_out;
-	float duty;
-
-} ControllerDebug_t;
-
-void MainTask(void * pvParameters);
-
-#ifdef __cplusplus
 }
-#endif
 
-#endif 
+MotorDriver::~MotorDriver()
+{
+
+}

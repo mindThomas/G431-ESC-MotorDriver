@@ -14,37 +14,29 @@
  * Web      :  http://www.tkjelectronics.dk
  * e-mail   :  thomasj@tkjelectronics.dk
  * ------------------------------------------
- */ 
+ */
 
-#ifndef MAIN_TASK_H
-#define MAIN_TASK_H
+#ifndef LIBRARIES_MOTORDRIVER_H
+#define LIBRARIES_MOTORDRIVER_H
 
-#include <stdint.h>
+#include "SyncedPWMADC.h"
+#include "Matrix.hpp"
+#include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
+#include <vector>
+#include <math.h>
 
-#ifdef __cplusplus
-extern "C" {
+class MotorDriver : SyncedPWMADC
+{
+
+private:
+
+
+public:
+	MotorDriver(uint32_t frequency = 10000, float maxDuty = 0.98);
+	~MotorDriver();
+
+};
+
 #endif
-
-typedef struct __attribute__((__packed__)) {
-	uint32_t Timestamp;
-
-	float current_setpoint;
-	float current_measurement;
-	float current_filtered;
-
-	float omega_measurement;
-	float omega_filtered;
-
-	float integral;
-	float PI_out;
-	float duty;
-
-} ControllerDebug_t;
-
-void MainTask(void * pvParameters);
-
-#ifdef __cplusplus
-}
-#endif
-
-#endif 

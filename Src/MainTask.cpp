@@ -49,6 +49,8 @@
 #include "MathLib.h"
 #include "LeastSquares.h"
 #include "NonlinearLeastSquares.hpp"
+#include "FirstOrderLPF.h"
+#include "CircularBuffer.hpp"
 
 void CPU_Load(void * pvParameters);
 void TaskRunTimeStats( char *pcWriteBuffer );
@@ -101,13 +103,24 @@ typedef struct {
 	int32_t value;
 } tx_data_t;
 
+typedef struct {
+	SyncedPWMADC * motor;
+	LSPC * lspc;
+} ControllerParameters_t;
+
 bool reset_tx_packing = true;
+size_t freeHeapBytes = 0;
 
 bool CurrentControllerEnabled = false;
 float CurrentSetpoint = 0.0f;
+float Controller_Kp = 4.0;
+float Controller_Ti = 12.0;
 void SetCurrentSetpoint_Callback(void * param, const std::vector<uint8_t>& data);
-void StartCurrentController_Callback(SyncedPWMADC * motor);
+void SetCurrentKpTi_Callback(void * param, const std::vector<uint8_t>& data);
+void StartCurrentController_Callback(ControllerParameters_t * motor);
 void CurrentControllerThread(void * pvParameters);
+void StartCurrentSweep_Callback(void * param, const std::vector<uint8_t>& data);
+void CurrentSweepThread(void * pvParameters);
 
 void MainTask(void * pvParameters)
 {
@@ -148,6 +161,8 @@ void MainTask(void * pvParameters)
 	motor->SetNumberOfAveragingSamples(1);
 	motor->SetDutyCycle_EndSampling(0);
 
+	ControllerParameters_t ControllerParameters = { motor, lspc };
+
 	lspc->registerCallback(0x01, SetDutyCycle_Callback, motor);
 	lspc->registerCallback(0x02, SetFreq_Callback, motor);
 	lspc->registerCallback(0x03, SetOperatingMode_Callback, motor);
@@ -157,7 +172,9 @@ void MainTask(void * pvParameters)
 	lspc->registerCallback(0x07, StartDutySweep_Callback, motor);
 	lspc->registerCallback(0x08, Calibration_Callback, motor);
 	lspc->registerCallback(0x09, StartSampleLocationSweep_Callback, motor);
-	lspc->registerCallback(0x0A, SetCurrentSetpoint_Callback, motor);
+	lspc->registerCallback(0x0A, SetCurrentSetpoint_Callback, &ControllerParameters);
+	lspc->registerCallback(0x0B, SetCurrentKpTi_Callback);
+	lspc->registerCallback(0x0C, StartCurrentSweep_Callback, &ControllerParameters);
 	captureCalibrationSamples = xSemaphoreCreateBinary();
 
 	/*osDelay(2000);
@@ -244,6 +261,7 @@ void MainTask(void * pvParameters)
 			}
 		}
 
+#if 0 // 1 = send debug data for logging
 #if 0 // 1 = do not pack data
 		if ( xQueueReceive( motor->SampleQueue, &sample, ( TickType_t ) portMAX_DELAY ) == pdPASS ) {
 			while (1) {
@@ -277,6 +295,10 @@ void MainTask(void * pvParameters)
 				}
 			}
 		}
+#endif
+#else
+		freeHeapBytes = xPortGetFreeHeapSize();
+		osDelay(200);
 #endif
 	}
 
@@ -1003,18 +1025,28 @@ void Calibration_Callback(void * param, const std::vector<uint8_t>& data)
 
 void SetCurrentSetpoint_Callback(void * param, const std::vector<uint8_t>& data)
 {
-	SyncedPWMADC * motor = (SyncedPWMADC*)param;
+	ControllerParameters_t * params = (ControllerParameters_t*)param;
 	if (data.size() == 2) {
 		int16_t currentSetpointRaw = *((int16_t*)data.data());
 		CurrentSetpoint = (float)currentSetpointRaw / 1000;
 
-		StartCurrentController_Callback(motor);
+		StartCurrentController_Callback(params);
 	}
 }
 
-void StartCurrentController_Callback(SyncedPWMADC * motor)
+void SetCurrentKpTi_Callback(void * param, const std::vector<uint8_t>& data)
+{
+	if (data.size() == 4) {
+		int16_t * currentSetpointRaw = ((int16_t*)data.data());
+		Controller_Kp = (float)currentSetpointRaw[0] / 100;
+		Controller_Ti = (float)currentSetpointRaw[1] / 100;
+	}
+}
+
+void StartCurrentController_Callback(ControllerParameters_t * params)
 {
 	TaskHandle_t CurrentControllerTaskHandle;
+
 	// Obtain the handle of a task from its name.
 	CurrentControllerTaskHandle = xTaskGetHandle( "Current controller" );
 
@@ -1028,96 +1060,233 @@ void StartCurrentController_Callback(SyncedPWMADC * motor)
 					  eInvalid ); // Include the task state in xTaskDetails.
 
 		if (xTaskDetails.eCurrentState != eDeleted && xTaskDetails.eCurrentState != eInvalid) {
-			return; // Frequency sweep task is already running
+			return; // Current controller task is already running
 		}
 	}
-	xTaskCreate(CurrentControllerThread, (char *)"Current controller", 256, (void*) motor, CURRENT_CONTROLLER_PRIORITY, &CurrentControllerTaskHandle);
+	xTaskCreate(CurrentControllerThread, (char *)"Current controller", 400, (void*) params, CURRENT_CONTROLLER_PRIORITY, &CurrentControllerTaskHandle);
 }
 
 void CurrentControllerThread(void * pvParameters)
 {
-	SyncedPWMADC * motor = (SyncedPWMADC *)pvParameters;
-	motor->SetOperatingMode(SyncedPWMADC::BRAKE);
-	motor->SetPWMFrequency(20000);
-	motor->SetSamplingInterval(20);
-	motor->SetNumberOfAveragingSamples(18);
-	motor->SetDutyCycle_MiddleSamplingOnce(0.0f);
+	ControllerParameters_t * params = (ControllerParameters_t*)pvParameters;
+	SyncedPWMADC * motor = params->motor;
+	LSPC * lspc = params->lspc;
 
-	SyncedPWMADC::CombinedSample_t sample = motor->GetLatestSample();
-	uint32_t prev_encoder = sample.Encoder;
-	float prev_time = sample.Timestamp;
+	{
+		FirstOrderLPF LPF_Omega(1.f/2000, 20);
+		FirstOrderLPF LPF_Current(1.f/2000, 500);
 
-	CurrentControllerEnabled = true;
+		CircularBuffer<float> Encoder_Times(40, true);
+		CircularBuffer<int32_t> Encoder_Ticks(40, true);
+
+		motor->SetOperatingMode(SyncedPWMADC::BRAKE);
+		motor->SetPWMFrequency(20000);
+		motor->SetSamplingInterval(10);
+		motor->SetNumberOfAveragingSamples(8);
+		motor->SetDutyCycle_MiddleSamplingOnce(0.0f);
+
+		motor->WaitForNewSample();
+		SyncedPWMADC::CombinedSample_t sample = motor->GetLatestSample();
+		ControllerDebug_t controllerDebug;
+
+		uint32_t prev_encoder = sample.Encoder;
+		float prev_time = sample.Timestamp;
+
+		float integral = 0.f;
+		float prev_error = 0.f;
+
+		bool TransmitDebugDownsample = true;
+
+		SyncedPWMADC::OperatingMode_t PreviousMode = SyncedPWMADC::BRAKE;
+		CurrentControllerEnabled = true;
+		while (CurrentControllerEnabled)
+		{
+			//motor->WaitForNewQueuedSample();
+			motor->WaitForNewSample();
+			sample = motor->GetLatestSample();
+
+			// Average current
+			// Vmot = R*i + Ke*omega
+			// duty*Vin = R*i + Ke*omega
+			// duty = 1/Vin * (R*i + Ke*omega)
+			// including current error term
+			// duty = 1/Vin * (R*i_setpoint + Ke*omega) - R/Vin*(i_meas-i_setpoint)
+			// duty = 1/Vin * (R*i_setpoint + Ke*omega) - Kp*i_err
+			//    Kp = R/Vin
+			//    i_err = i_meas - i_setpoint
+			/*if (motor->Samples.Encoder.Updated &&
+				motor->Samples.Vbus.Updated &&
+				motor->Samples.CurrentSense)*/
+			if ( CurrentControllerEnabled && ((PreviousMode == SyncedPWMADC::COAST) || ((sample.Current.ON != 0 || sample.Current.OFF != 0) && (sample.VbusON != 0 || sample.VbusOFF != 0))) )
+			{
+				float current = 0;
+				float vin = 0;
+				if (fabsf(sample.Current.ON) > fabsf(sample.Current.OFF)) {
+					current = sample.Current.ON;
+					vin = sample.VbusON;
+				} else {
+					current = sample.Current.OFF;
+					vin = sample.VbusOFF;
+				}
+
+				float current_filtered = LPF_Current.Filter(current);
+
+				int32_t encoder = sample.Encoder;
+				float time = sample.Timestamp / 100000.f;
+
+				Encoder_Times.Push(time);
+				Encoder_Ticks.Push(encoder);
+
+				int32_t delta_encoder = encoder - prev_encoder; // OBS. We might need to consider wrapping if the motor will be running for a long time?
+				float delta_time = time - prev_time;
+				prev_encoder = encoder;
+				prev_time = time;
+
+				float omega = M_2PI * ((float)delta_encoder / motor->MotorParameters.TicksAfterGearing) / delta_time;
+
+				delta_time = Encoder_Times.Front() - Encoder_Times.Back();
+				delta_encoder = Encoder_Ticks.Front() - Encoder_Ticks.Back(); // OBS. We might need to consider wrapping if the motor will be running for a long time?
+				float omega_filtered = M_2PI * ((float)delta_encoder / motor->MotorParameters.TicksAfterGearing) / delta_time;
+				omega_filtered = LPF_Omega.Filter(omega_filtered);
+
+				/* PI Controller */
+				float Kp = Controller_Kp;
+				float Ki = Controller_Kp * Controller_Ti;
+
+				float error = CurrentSetpoint - current;
+				integral += Ki * delta_time/2.f * (error + prev_error);
+				if (integral > vin) {
+					integral = vin;
+				} else if (integral < -vin) {
+					integral = -vin;
+				}
+
+				float PI_out = Kp*error + integral;
+				prev_error = error;
+
+				// Add feedforward term
+				float u = PI_out + motor->MotorParameters.Ke * omega_filtered; // + motor->MotorParameters.R * CurrentSetpoint; // reference feedforward currently disabled (handled by integral term)
+				// With the reference feedforward the gains has to be heavily reduced but the bandwidth seem to increase as the lag is reduced
+				// Use the following gains with reference feedforward enabled: Kp=1, Ti=2
+
+				// Convert to duty cycle
+				float duty = u / vin;
+
+	#if 0
+				if (fabs(CurrentSetpoint) > 0) {
+					duty += 1/vin * (motor->MotorParameters.R*CurrentSetpoint + motor->MotorParameters.Ke*omega_filtered);
+				}
+
+				/*if (CurrentSetpoint > 0) {
+					PreviousDirection = true;
+				}
+				else if (CurrentSetpoint < 0) {
+					PreviousDirection = false;
+				}*/
+
+				if ((CurrentSetpoint > 0 && duty < 0) ||
+					(CurrentSetpoint < 0 && duty > 0))
+				{
+					duty = 0.0f;
+				}
+
+				float i_err = current_filtered - CurrentSetpoint;
+				const float Kp = Controller_Kp;
+				duty -= Kp * motor->MotorParameters.R/vin * i_err;
+
+				if ((CurrentSetpoint > 0 && duty < 0) ||
+								(CurrentSetpoint < 0 && duty > 0) ||
+								(CurrentSetpoint == 0))
+				{
+					duty = 0.0f;
+				}
+	#endif
+
+				if (CurrentSetpoint == 0) {
+					duty = 0.0f;
+					integral = 0;
+				}
+
+				if (duty > 1.0f) {
+					duty = 1.0f;
+				} else if (duty < -1.0f) {
+					duty = -1.0f;
+				}
+
+				/*if (CurrentSetpoint == 0) {
+					if (PreviousMode != SyncedPWMADC::COAST) {
+						PreviousMode = SyncedPWMADC::COAST;
+						motor->SetOperatingMode(PreviousMode);
+					}
+				} else {
+					if (PreviousMode != SyncedPWMADC::BRAKE) {
+						PreviousMode = SyncedPWMADC::BRAKE;
+						motor->SetOperatingMode(PreviousMode);
+					}
+				}*/
+				motor->SetDutyCycle_MiddleSamplingOnce(duty);
+
+				//if (TransmitDebugDownsample) {
+					controllerDebug.Timestamp = sample.Timestamp;
+					controllerDebug.current_setpoint = CurrentSetpoint;
+					controllerDebug.omega_measurement = omega;
+					controllerDebug.omega_filtered = omega_filtered;
+					controllerDebug.current_measurement = current;
+					controllerDebug.current_filtered = current_filtered;
+					controllerDebug.integral = integral;
+					controllerDebug.PI_out = PI_out;
+					controllerDebug.duty = duty;
+					lspc->TransmitAsync(0x05, (uint8_t *)&controllerDebug, sizeof(ControllerDebug_t));
+				/*}
+				TransmitDebugDownsample = !TransmitDebugDownsample;*/
+			}
+		}
+
+		//motor->SetDutyCycle_MiddleSampling(0.0f);
+	}
+	vTaskDelete(NULL); // delete/stop this current task
+	// OBS: Destructor of this function will never be called! Therefore all objects need to be wrapped in a bracketed group.
+}
+
+void StartCurrentSweep_Callback(void * param, const std::vector<uint8_t>& data)
+{
+	ControllerParameters_t * params = (ControllerParameters_t*)param;
+	if (data.size() == 0) {
+		TaskHandle_t CurrentSweepTaskHandle;
+	    // Obtain the handle of a task from its name.
+		CurrentSweepTaskHandle = xTaskGetHandle( "Current sweep" );
+
+		if (CurrentSweepTaskHandle != 0) {
+			TaskStatus_t xTaskDetails;
+
+			// Use the handle to obtain further information about the task.
+			vTaskGetInfo( CurrentSweepTaskHandle,
+						  &xTaskDetails,
+						  pdTRUE, // Include the high water mark in xTaskDetails.
+						  eInvalid ); // Include the task state in xTaskDetails.
+
+			if (xTaskDetails.eCurrentState != eDeleted && xTaskDetails.eCurrentState != eInvalid) {
+				return; // Frequency sweep task is already running
+			}
+		}
+		StartCurrentController_Callback(params);
+		xTaskCreate(CurrentSweepThread, (char *)"Current sweep", 256, (void*)0, CALIBRATION_SWEEP_PRIORITY, &CurrentSweepTaskHandle);
+	}
+}
+
+void CurrentSweepThread(void * pvParameters)
+{
+	float amplitude = 2.f; // A
+	float freq = 200; // Hz
+
 	while (CurrentControllerEnabled)
 	{
-		motor->WaitForNewQueuedSample();
-		sample = motor->GetLatestSample();
+		float time = HAL_GetTime();
+		CurrentSetpoint = amplitude * sinf(2*M_PI*freq * time);
 
-		// Average current
-		// Vmot = R*i + Ke*omega
-		// duty*Vin = R*i + Ke*omega
-		// duty = 1/Vin * (R*i + Ke*omega)
-		// including current error term
-		// duty = 1/Vin * (R*i_setpoint + Ke*omega) - R/Vin*(i_meas-i_setpoint)
-		// duty = 1/Vin * (R*i_setpoint + Ke*omega) - Kp*i_err
-		//    Kp = R/Vin
-		//    i_err = i_meas - i_setpoint
-		/*if (motor->Samples.Encoder.Updated &&
-			motor->Samples.Vbus.Updated &&
-			motor->Samples.CurrentSense)*/
-		if ( CurrentControllerEnabled && (sample.Current.ON != 0 || sample.Current.OFF != 0) && (sample.VbusON != 0 || sample.VbusOFF != 0) )
-		{
-			float current = 0;
-			float vin = 0;
-			if (fabsf(sample.Current.ON) > fabsf(sample.Current.OFF)) {
-				current = sample.Current.ON;
-				vin = sample.VbusON;
-			} else {
-				current = sample.Current.OFF;
-				vin = sample.VbusOFF;
-			}
-
-			uint32_t encoder = sample.Encoder;
-			float time = sample.Timestamp / 100000.f;
-
-			int32_t delta_encoder = encoder - prev_encoder;
-			float delta_time = time - prev_time;
-
-			float omega = M_2PI * ((float)delta_encoder / motor->MotorParameters.TicksAfterGearing) / delta_time;
-
-			float duty = 0;
-			if (fabs(CurrentSetpoint) > 0) {
-				duty += 1/vin * (motor->MotorParameters.R*CurrentSetpoint + motor->MotorParameters.Ke*omega);
-			}
-
-			if ((CurrentSetpoint > 0 && duty < 0) ||
-				(CurrentSetpoint < 0 && duty > 0))
-			{
-				duty = 0.0f;
-			}
-
-			float i_err = current - CurrentSetpoint;
-			const float Kp = 2.5;
-			duty -= Kp * motor->MotorParameters.R/vin * i_err;
-			if ((CurrentSetpoint > 0 && duty < 0) ||
-				(CurrentSetpoint < 0 && duty > 0))
-			{
-				duty = 0.0f;
-			}
-			if (duty > 1.0f) {
-				duty = 1.0f;
-			} else if (duty < -1.0f) {
-				duty = -1.0f;
-			}
-
-			motor->SetDutyCycle_MiddleSamplingOnce(duty);
-
-			prev_encoder = encoder;
-			prev_time = time;
-		}
+		osDelayMs(0.5);
 	}
 
-	//motor->SetDutyCycle_MiddleSampling(0.0f);
-
 	vTaskDelete(NULL); // delete/stop this current task
+	// OBS: Destructor of this function will never be called! Therefore all objects need to be wrapped in a bracketed group.
 }
