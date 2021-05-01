@@ -43,11 +43,6 @@
 			<locationURI>PARENT-2-PROJECT_LOC/STM32-libraries</locationURI>
 		</link>
 		<link>
-			<name>Inc/FirstOrderLPF.h</name>
-			<type>1</type>
-			<locationURI>PARENT-2-PROJECT_LOC/Inc/FirstOrderLPF.h</locationURI>
-		</link>
-		<link>
 			<name>Inc/FreeRTOSConfig.h</name>
 			<type>1</type>
 			<locationURI>PARENT-2-PROJECT_LOC/Inc/FreeRTOSConfig.h</locationURI>
@@ -113,9 +108,9 @@
 			<locationURI>PARENT-1-PROJECT_LOC/syscalls.c</locationURI>
 		</link>
 		<link>
-			<name>Src/FirstOrderLPF.c</name>
+			<name>Src/FirstOrderLPFSimple.c</name>
 			<type>1</type>
-			<locationURI>PARENT-2-PROJECT_LOC/Src/FirstOrderLPF.c</locationURI>
+			<locationURI>PARENT-8-PROJECT_LOC/Dropbox/Private%20share/DC%20motor%20driver/G431-ESC-MotorDriver/Firmware/Src/FirstOrderLPFSimple.c</locationURI>
 		</link>
 		<link>
 			<name>Src/FreeRTOS-openocd.c</name>

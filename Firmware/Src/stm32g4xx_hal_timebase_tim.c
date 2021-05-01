@@ -217,6 +217,11 @@ uint32_t HAL_GetTick(void)
   return (HAL_GetHighResTick() / 100); // divide by 100 since we have configured HAL timer to run at 100 kHz in stm32h7xx_hal_timebase_tim.c
 }
 
+float HAL_GetTime(void)
+{
+	return (float)HAL_GetHighResTick() / frequency;
+}
+
 /**
   * @brief This function handles TIM1 break interrupt and TIM15 global interrupt.
   */

@@ -16,7 +16,7 @@
  * ------------------------------------------
  */
  
-#include "FirstOrderLPF.h"
+#include "FirstOrderLPFSimple.h"
  
 void FirstOrderLPF_Init(FirstOrderLPF * lpf, float Ts, float tau)
 {

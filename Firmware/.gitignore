@@ -1,3 +1,17 @@
+SW4STM32/G431-ESC-Firmware/Debug/
+SW4STM32/G431-ESC-Firmware/.settings/
+
+G431-ESC-Firmware.elf.launch
+G431-ESC-Firmware_converter.log
+
+# Ignore build folder
+build/
+cmake-build-debug/
+.idea/
+.cproject
+.project
+.settings/
+
 # Prerequisites
 *.d
 

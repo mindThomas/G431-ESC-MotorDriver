@@ -19,8 +19,8 @@
 #ifndef LIBRARIES_MOTORDRIVER_H
 #define LIBRARIES_MOTORDRIVER_H
 
-#include "SyncedPWMADC.h"
-#include "Matrix.hpp"
+#include <SyncedPWMADC/SyncedPWMADC.hpp>
+#include <Matrix/Matrix.hpp>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>

@@ -27,17 +27,17 @@
 #include <math.h>
 
 /* Include Periphiral drivers */
-#include "UART.h"
-#include "IO.h"
-#include "Encoder.h"
-#include "CANBus.h"
-#include "Timer.h"
-#include "SyncedPWMADC.h"
+#include <UART/UART.hpp>
+#include <IO/IO.hpp>
+#include <Encoder/Encoder.hpp>
+#include <CANBus/CANBus.hpp>
+#include <Timer/Timer.hpp>
+#include <SyncedPWMADC/SyncedPWMADC.hpp>
 
 /* Include Drivers */
 
 /* Include Module libraries */
-#include "Debug.h"
+#include <Debug/Debug.h>
 
 /* Include Device libraries */
 #include "LSPC.hpp"
@@ -45,12 +45,12 @@
 /* Include Application-layer libraries */
 
 /* Miscellaneous includes */
-#include "Matrix.hpp"
-#include "MathLib.h"
-#include "LeastSquares.h"
-#include "NonlinearLeastSquares.hpp"
-#include "FirstOrderLPF.h"
-#include "CircularBuffer.hpp"
+#include <Matrix/Matrix.hpp>
+#include <MathLib/MathLib.h>
+#include <LeastSquares/LeastSquares.hpp>
+#include <NonlinearLeastSquares/NonlinearLeastSquares.hpp>
+#include <FirstOrderLPF/FirstOrderLPF.hpp>
+#include <CircularBuffer/CircularBuffer.hpp>
 
 void CPU_Load(void * pvParameters);
 void TaskRunTimeStats( char *pcWriteBuffer );
