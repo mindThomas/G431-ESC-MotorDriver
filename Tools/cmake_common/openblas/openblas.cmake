@@ -1,0 +1,17 @@
+# check the existance of Pangolin, if not/outdated, install/reinstall
+include(${CMAKE_CURRENT_LIST_DIR}/FindOpenBLAS.cmake)
+if (${OpenBLAS_FOUND})
+	message(STATUS "OpenBLAS found")
+else()
+	message(STATUS "OpenBLAS not found! Executing install script.")
+	execute_process(COMMAND ${CMAKE_CURRENT_LIST_DIR}/install.sh
+	    		RESULT_VARIABLE retcode)
+	if(NOT ${retcode} EQUAL 0)
+	    message(FATAL_ERROR "OpenBLAS.cmake: Error when excuting ${CMAKE_CURRENT_LIST_DIR}/install.sh")
+	endif()
+	include(${CMAKE_CURRENT_LIST_DIR}/FindOpenBLAS.cmake)
+	if (NOT ${OpenBLAS_FOUND})
+	    message(FATAL_ERROR "OpenBLAS.cmake: OpenBLAS was not found even after installing")
+	endif()
+endif()
+include_directories(${OpenBLAS_INCLUDE_DIRS})

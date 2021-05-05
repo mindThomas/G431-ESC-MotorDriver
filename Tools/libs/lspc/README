@@ -1,0 +1,2 @@
+Based on LSPC library from https://github.com/kdhansen/LSPC
+Reorganized such that the boost part of the library became compilable into a shared library
