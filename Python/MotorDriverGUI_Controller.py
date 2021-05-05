@@ -496,7 +496,7 @@ def main():
     # Connect to CAN bus
     ports = lspc.list_serial_ports()
     print(ports)
-    com = lspc.LSPC(ports[1])
+    com = lspc.LSPC(ports[0])
     com.open(1612800)
 
     # CSV files
