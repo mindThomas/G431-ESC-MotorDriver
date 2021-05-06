@@ -1,0 +1,3 @@
+message("Supported families: ${STM32_SUPPORTED_FAMILIES_SHORT_NAME}")
+message("CMSIS_LIBRARIES=${CMSIS_LIBRARIES}")
+message("HAL_LIBRARIES=${HAL_LIBRARIES}")

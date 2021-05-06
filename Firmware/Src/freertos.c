@@ -49,7 +49,9 @@
 /* USER CODE END Header */
 
 /* Includes ------------------------------------------------------------------*/
-#include "stm32g4xx_hal_timebase_tim.h"
+#ifdef USE_PRECISION_SYSTICK
+#include <PrecisionSysTick/PrecisionSysTick.h>
+#endif
 #include "FreeRTOS.h"
 #include "task.h"
 #include "main.h"
@@ -97,7 +99,11 @@ __weak void configureTimerForRunTimeStats(void)
 
 inline unsigned long getRunTimeCounterValue(void)
 {
+#ifdef USE_PRECISION_SYSTICK
 	return HAL_GetHighResTick();
+#else
+	return HAL_GetTick();
+#endif
 }
 /* USER CODE END 1 */
 

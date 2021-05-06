@@ -355,7 +355,9 @@ The real value may vary depending on the variations in voltage and temperature.*
 #include "stm32g4xx_hal_wwdg.h"
 #endif /* HAL_WWDG_MODULE_ENABLED */
 
-#include "stm32g4xx_hal_timebase_tim.h"
+#ifdef USE_PRECISION_SYSTICK
+#include <PrecisionSysTick/PrecisionSysTick.h>
+#endif /* PRECISIONSYSTICK_ENABLED */
 
 /* Exported macro ------------------------------------------------------------*/
 #ifdef  USE_FULL_ASSERT

@@ -21,6 +21,7 @@
 #include "cmsis_os.h"
 
 /* Configure clocks:
+    - HSE = 8 MHz
 	- CPU (SYSCLK) = 168 MHz
 	- HCLK to AHB bus, core, memory and DMA = 168 MHz
 	- SysTick timer clock = 168 MHz

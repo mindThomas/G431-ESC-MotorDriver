@@ -1,4 +1,4 @@
-/* Copyright (C) 2020 Thomas Jespersen, TKJ Electronics. All rights reserved.
+/* Copyright (C) 2021- Thomas Jespersen, TKJ Electronics. All rights reserved.
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the MIT License
@@ -138,13 +138,14 @@ void MainTask(void * pvParameters)
 	LSPC * lspc = new LSPC(uart, LSPC_RECEIVER_PRIORITY, LSPC_TRANSMITTER_PRIORITY);
 	Debug::AssignDebugCOM((void*)lspc);
 
-	/*TaskHandle_t CPULoadTaskHandle;
-	xTaskCreate(CPU_Load, (char *)"CPU Load", 256, (void*) lspc, CPULOAD_PRIORITY, &CPULoadTaskHandle);*/
+	TaskHandle_t CPULoadTaskHandle;
+	xTaskCreate(CPU_Load, (char *)"CPU Load", 256, (void*) lspc, CPULOAD_PRIORITY, &CPULoadTaskHandle);
 
 	IO * led = new IO(GPIOC, GPIO_PIN_6);
 	IO * debug = new IO(GPIOA, GPIO_PIN_15);
 	Encoder * encoder = new Encoder(Encoder::TIMER4, true);
 
+#if 0
 	CANBus * can = new CANBus();
 	can->registerCallback(0x55, CAN_Callback);
 
@@ -301,6 +302,7 @@ void MainTask(void * pvParameters)
 		osDelay(200);
 #endif
 	}
+#endif
 
 	while (1)
 	{

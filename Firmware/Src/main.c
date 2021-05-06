@@ -1,4 +1,4 @@
-/* Copyright (C) 2020 Thomas Jespersen, TKJ Electronics. All rights reserved.
+/* Copyright (C) 2020- Thomas Jespersen, TKJ Electronics. All rights reserved.
  *
  * This program is free software: you can redistribute it and/or modify it
  * under the terms of the MIT License
@@ -18,14 +18,21 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "cmsis_os.h"
+
+// FreeRTOS include
+#ifdef USE_FREERTOS_CMSIS
+#include <cmsis_os.h>
+#elif defined(USE_FREERTOS)
+#include "FreeRTOS.h"
+#endif
 
 /* Private includes ----------------------------------------------------------*/
 #include "MainTask.h"
+#include "TestTask.h"
 #include "ProcessorInit.h"
 #include "MemoryManagement.h"
 #include "Priorities.h"
-#include "MATLABCoderInit.h"
+#include <MATLABCoderInit/MATLABCoderInit.h>
 
 /* Private variables ---------------------------------------------------------*/
 TaskHandle_t mainTaskHandle;
@@ -46,7 +53,7 @@ int main(void)
   MATLABCoder_initialize();
 
   /* Create the main thread which creates objects and spawns the rest of the threads */
-  xTaskCreate(MainTask, "mainTask", 1024, (void*) NULL, MAIN_TASK_PRIORITY, &mainTaskHandle);
+  xTaskCreate(TestTask, "mainTask", 1024, (void*) NULL, MAIN_TASK_PRIORITY, &mainTaskHandle);
 
   /* Start scheduler */
   osKernelStart();
