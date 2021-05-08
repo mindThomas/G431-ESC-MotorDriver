@@ -20,56 +20,56 @@ project(G431-ESC-MotorDriver)
 cmake_minimum_required(VERSION 3.10)
 
 if(POLICY CMP0020)
-  cmake_policy(SET CMP0020 NEW)
+    cmake_policy(SET CMP0020 NEW)
 endif()
 
-message("##################################\n"
-        "# Thomas' Automatic CMake loader #\n"
+message("##################################\n" "# Thomas' Automatic CMake loader #\n"
         "##################################")
 
-## Add support for C++11
+# Add support for C++11
 #add_definitions(-std=c++11)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED YES)
 set(CMAKE_CXX_EXTENSIONS NO) # use -std=c++14 instead of -std=gnu++14
 
-## Add automatic Qt UI file conversion
+# Add automatic Qt UI file conversion
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-## Compile for native architecture to optimize performance
+# Compile for native architecture to optimize performance
 #include(CheckCXXCompilerFlag)
 #CHECK_CXX_COMPILER_FLAG("-march=native" COMPILER_SUPPORTS_MARCH_NATIVE)
 #if(COMPILER_SUPPORTS_MARCH_NATIVE)
-    #message(STATUS "Enabling native architecture")
-    #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native")
-    #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
+#message(STATUS "Enabling native architecture")
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
 #endif()
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=x86-64 -mavx")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Winit-self -D_FORTIFY_SOURCE=2 -fstack-protector-strong") # "-Werror=format-security -Werror=implicit-function-declaration"
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Winit-self -D_FORTIFY_SOURCE=2 -fstack-protector-strong")
+# "-Werror=format-security -Werror=implicit-function-declaration"
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -DNDEBUG") # Disable assert() in release builds
 set(COMMON_LINK_FLAGS "") # "-Wl,--copy-dt-needed-entries -Wl,-E -Wl,-z,relro,-z,now -Wl,--as-needed -Wl,-z,noexecstack"
 
-## Use -pthread or the compiler's equivalent
+# Use -pthread or the compiler's equivalent
 find_package(Threads REQUIRED)
 set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 
-## Make sure -fPIC is enabled
+# Make sure -fPIC is enabled
 set(CMAKE_POSITION_INDEPENDENT_CODE True)
 # -pie is needed here because of https://gitlab.kitware.com/cmake/cmake/issues/14983
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${COMMON_LINK_FLAGS} -pie")
 set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} ${COMMON_LINK_FLAGS}")
 set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} ${COMMON_LINK_FLAGS}")
 
-## For using pkg-config to find library flags
+# For using pkg-config to find library flags
 find_package(PkgConfig)
 
 # build type
 if(CMAKE_BUILD_TYPE STREQUAL "")
-  unset(CMAKE_BUILD_TYPE CACHE) # no ambiguity
+    unset(CMAKE_BUILD_TYPE CACHE) # no ambiguity
 endif()
 set(CMAKE_BUILD_TYPE "Release" CACHE STRING "RelWithDebInfo, Release or Debug")
 
@@ -85,7 +85,7 @@ message(STATUS "  CMAKE_CXX_FLAGS_RELWITHDEBINFO: ${CMAKE_CXX_FLAGS_RELWITHDEBIN
 message(STATUS "  CMAKE_CXX_FLAGS_MINSIZEREL: ${CMAKE_CXX_FLAGS_MINSIZEREL}")
 message(STATUS "\n--")
 
-LIST(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_common)
+list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_common)
 include(cmake_common/gtsam/gtsam.cmake) # also includes Eigen
 include(cmake_common/cuda.cmake)
 include(cmake_common/qt5.cmake) # MUST COME BEFORE pcl.cmake
@@ -103,7 +103,16 @@ add_subdirectory(libs/spdlog)
 message(STATUS "   Eigen include directory: ${EIGEN3_INCLUDE_DIR}")
 message(STATUS "   OpenCV path: ${OpenCV_INCLUDE_DIRS}")
 
-find_package(Boost REQUIRED COMPONENTS system signals python thread program_options regex timer filesystem QUIET)
+find_package(Boost REQUIRED
+             COMPONENTS system
+                        signals
+                        python
+                        thread
+                        program_options
+                        regex
+                        timer
+                        filesystem
+             QUIET)
 mark_as_advanced(BOOST_THREAD_LIBRARY)
 
 find_package(CURL REQUIRED)
@@ -123,7 +132,7 @@ link_directories(... ${Boost_LIBRARY_DIRS})
 # Print all include directories
 #get_property(dirs DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY INCLUDE_DIRECTORIES)
 #foreach(dir ${dirs})
-    #message(STATUS "dir='${dir}'")
+#message(STATUS "dir='${dir}'")
 #endforeach()
 
 # Make a compiler flag for the current source folder path
@@ -142,35 +151,39 @@ add_subdirectory(include)
 include_directories(../Common)
 add_subdirectory(../Common "Common")
 
-MACRO(update_folder_name)
+macro(update_folder_name)
     get_filename_component(folder_name ${CMAKE_CURRENT_SOURCE_DIR} NAME)
-    string(REPLACE " " "_" folder_name ${folder_name})
-ENDMACRO()
+    string(REPLACE " "
+                   "_"
+                   folder_name
+                   ${folder_name})
+endmacro()
 
 # Include libraries
-MACRO(CMAKE_LIBS_DIRECTORIES return_list)    
-    set(EXCLUDE_DIRS libs/spdlog
-                     ${PROJECT_BINARY_DIR}
-                     ${CMAKE_CURRENT_SOURCE_DIR}/include
-                     ${CMAKE_CURRENT_SOURCE_DIR}/src)
-    FILE(GLOB_RECURSE new_list CMakeLists.txt)
-    SET(dir_list "")
-    FOREACH(file_path ${new_list})
-        GET_FILENAME_COMPONENT(dir_path ${file_path} PATH)         
-        FOREACH(EXCLUDE_DIR ${EXCLUDE_DIRS})
-            string (FIND ${dir_path} ${EXCLUDE_DIR} EXCLUDE_DIR_FOUND)  
-            if (NOT ${EXCLUDE_DIR_FOUND} EQUAL -1)
+macro(CMAKE_LIBS_DIRECTORIES return_list)
+    set(EXCLUDE_DIRS
+        libs/spdlog
+        ${PROJECT_BINARY_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    file(GLOB_RECURSE new_list CMakeLists.txt)
+    set(dir_list "")
+    foreach(file_path ${new_list})
+        get_filename_component(dir_path ${file_path} PATH)
+        foreach(EXCLUDE_DIR ${EXCLUDE_DIRS})
+            string(FIND ${dir_path} ${EXCLUDE_DIR} EXCLUDE_DIR_FOUND)
+            if(NOT ${EXCLUDE_DIR_FOUND} EQUAL -1)
                 break()
             endif()
-        ENDFOREACH()        
-        if (${EXCLUDE_DIR_FOUND} EQUAL -1)
-            SET(dir_list ${dir_list} ${dir_path})
-        endif()        
-    ENDFOREACH()
-    LIST(REMOVE_DUPLICATES dir_list)
-    LIST(REMOVE_ITEM dir_list ${CMAKE_CURRENT_SOURCE_DIR})
-    SET(${return_list} ${dir_list})
-ENDMACRO()
+        endforeach()
+        if(${EXCLUDE_DIR_FOUND} EQUAL -1)
+            set(dir_list ${dir_list} ${dir_path})
+        endif()
+    endforeach()
+    list(REMOVE_DUPLICATES dir_list)
+    list(REMOVE_ITEM dir_list ${CMAKE_CURRENT_SOURCE_DIR})
+    set(${return_list} ${dir_list})
+endmacro()
 
 message("#################### FINISHED FINDING/LOADING PACKAGES ####################\n")
 message(STATUS "Project directory: ${PROJECT_SOURCE_DIR}")
@@ -178,94 +191,97 @@ message(STATUS "Root directory: " ${CMAKE_CURRENT_SOURCE_DIR})
 message(STATUS "")
 
 include_directories(libs)
-CMAKE_LIBS_DIRECTORIES(SUBDIRS)
+cmake_libs_directories(SUBDIRS)
 message(STATUS "Adding libraries:")
-FOREACH(subdir ${SUBDIRS})
-  #message(STATUS "   " ${subdir})
-  ADD_SUBDIRECTORY(${subdir})
-ENDFOREACH()
+foreach(subdir ${SUBDIRS})
+    #message(STATUS "   " ${subdir})
+    add_subdirectory(${subdir})
+endforeach()
 message(STATUS "")
 
 # Include the binary projects
-MACRO(HEADER_DIRECTORIES return_list)
-    FILE(GLOB_RECURSE new_list *.h)
-    SET(dir_list "")
-    FOREACH(file_path ${new_list})
-        GET_FILENAME_COMPONENT(dir_path ${file_path} PATH)
-        SET(dir_list ${dir_list} ${dir_path})
-    ENDFOREACH()
-    LIST(REMOVE_DUPLICATES dir_list)
-    SET(${return_list} ${dir_list})
-ENDMACRO()
+macro(HEADER_DIRECTORIES return_list)
+    file(GLOB_RECURSE new_list *.h)
+    set(dir_list "")
+    foreach(file_path ${new_list})
+        get_filename_component(dir_path ${file_path} PATH)
+        set(dir_list ${dir_list} ${dir_path})
+    endforeach()
+    list(REMOVE_DUPLICATES dir_list)
+    set(${return_list} ${dir_list})
+endmacro()
 
-MACRO(CMAKE_SRC_DIRECTORIES return_list)
+macro(CMAKE_SRC_DIRECTORIES return_list)
     set(EXCLUDE_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
     set(EXCLUDE_LIBS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs)
-    FILE(GLOB_RECURSE new_list CMakeLists.txt)
-    SET(dir_list "")
-    FOREACH(file_path ${new_list})
-        GET_FILENAME_COMPONENT(dir_path ${file_path} PATH)
-        string (FIND ${dir_path} ${EXCLUDE_INCLUDE_DIR} EXCLUDE_INCLUDE_DIR_FOUND)
-        string (FIND ${dir_path} ${EXCLUDE_LIBS_DIR} EXCLUDE_LIBS_DIR_FOUND)
-        if (${EXCLUDE_INCLUDE_DIR_FOUND} EQUAL -1 AND ${EXCLUDE_LIBS_DIR_FOUND} EQUAL -1)
-            SET(dir_list ${dir_list} ${dir_path})
-    endif ()
-    ENDFOREACH()
-    LIST(REMOVE_DUPLICATES dir_list)
-    LIST(REMOVE_ITEM dir_list ${CMAKE_CURRENT_SOURCE_DIR})
-    SET(${return_list} ${dir_list})
-ENDMACRO()
+    file(GLOB_RECURSE new_list CMakeLists.txt)
+    set(dir_list "")
+    foreach(file_path ${new_list})
+        get_filename_component(dir_path ${file_path} PATH)
+        string(FIND ${dir_path} ${EXCLUDE_INCLUDE_DIR} EXCLUDE_INCLUDE_DIR_FOUND)
+        string(FIND ${dir_path} ${EXCLUDE_LIBS_DIR} EXCLUDE_LIBS_DIR_FOUND)
+        if(${EXCLUDE_INCLUDE_DIR_FOUND} EQUAL -1 AND ${EXCLUDE_LIBS_DIR_FOUND} EQUAL -1)
+            set(dir_list ${dir_list} ${dir_path})
+        endif()
+    endforeach()
+    list(REMOVE_DUPLICATES dir_list)
+    list(REMOVE_ITEM dir_list ${CMAKE_CURRENT_SOURCE_DIR})
+    set(${return_list} ${dir_list})
+endmacro()
 
-MACRO(SUBDIRLIST result curdir)
-  FILE(GLOB children RELATIVE ${curdir} ${curdir}/*)
-  SET(dirlist "")
-  FOREACH(child ${children})
-    IF(IS_DIRECTORY ${curdir}/${child})
-      LIST(APPEND dirlist ${child})
-    ENDIF()
-  ENDFOREACH()
-  SET(${result} ${dirlist})
-ENDMACRO()
+macro(SUBDIRLIST result curdir)
+    file(GLOB children RELATIVE ${curdir} ${curdir}/*)
+    set(dirlist "")
+    foreach(child ${children})
+        if(IS_DIRECTORY ${curdir}/${child})
+            list(APPEND dirlist ${child})
+        endif()
+    endforeach()
+    set(${result} ${dirlist})
+endmacro()
 
-MACRO(prepare_binary)
+macro(prepare_binary)
     #message(STATUS "   ${CMAKE_CURRENT_SOURCE_DIR}\t\t[${CMAKE_BUILD_TYPE}]")
     update_folder_name() # Name the binary in this folder as the folder name
     set(binary_name "${folder_name}")
     message(STATUS "   ${binary_name}\t\t[${CMAKE_BUILD_TYPE}]")
-    FILE(GLOB_RECURSE binary_sources_c *.c) # find all cpp files
-    FILE(GLOB_RECURSE binary_sources_cpp *.cpp) # find all cpp files
-    FILE(GLOB_RECURSE binary_headers *.hpp) # find all hpp files
-    #message(STATUS "        Binary sources: " ${binary_sources})
-    #message(STATUS "        Binary headers: " ${binary_headers})
-    #message(STATUS "        Global headers: " ${GLOBAL_HEADERS})
+    file(GLOB_RECURSE binary_sources_c *.c) # find all cpp files
+    file(GLOB_RECURSE binary_sources_cpp *.cpp) # find all cpp files
+    file(GLOB_RECURSE binary_headers *.hpp) # find all hpp files
+                                            #message(STATUS "        Binary sources: " ${binary_sources})
+                                            #message(STATUS "        Binary headers: " ${binary_headers})
+                                            #message(STATUS "        Global headers: " ${GLOBAL_HEADERS})
     set_property(SOURCE ${binary_sources_c} PROPERTY SKIP_AUTOGEN ON)
     set_property(SOURCE ${binary_sources_cpp} PROPERTY SKIP_AUTOGEN ON)
     set_property(SOURCE ${binary_headers} PROPERTY SKIP_AUTOGEN ON)
     set_property(SOURCE ${GLOBAL_HEADERS} PROPERTY SKIP_AUTOGEN ON)
 
-    add_executable( ${binary_name} ${binary_sources_c} ${binary_sources_cpp} ${binary_headers} ${GLOBAL_HEADERS} )
-    target_link_libraries( ${binary_name} ${binary_dependencies} )
+    add_executable(${binary_name}
+                   ${binary_sources_c}
+                   ${binary_sources_cpp}
+                   ${binary_headers}
+                   ${GLOBAL_HEADERS})
+    target_link_libraries(${binary_name} ${binary_dependencies})
 
-    set_target_properties( ${binary_name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} )
-    set_target_properties( ${binary_name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} )
-    set_target_properties( ${binary_name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} )
+    set_target_properties(${binary_name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+    set_target_properties(${binary_name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+    set_target_properties(${binary_name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 
-    set_target_properties( ${binary_name} PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY} )
-    set_target_properties( ${binary_name} PROPERTIES LIBRARY_OUTPUT_DIRECTORY_DEBUG ${CMAKE_LIBRARY_OUTPUT_DIRECTORY} )
-    set_target_properties( ${binary_name} PROPERTIES LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_LIBRARY_OUTPUT_DIRECTORY} )
-ENDMACRO()
+    set_target_properties(${binary_name} PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
+    set_target_properties(${binary_name} PROPERTIES LIBRARY_OUTPUT_DIRECTORY_DEBUG ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
+    set_target_properties(${binary_name} PROPERTIES LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
+endmacro()
 
-
-MACRO(prepare_qt_binary)
+macro(prepare_qt_binary)
     #message(STATUS "   ${CMAKE_CURRENT_SOURCE_DIR}\t\t[${CMAKE_BUILD_TYPE}]")
     update_folder_name() # Name the binary in this folder as the folder name
     set(binary_name "${folder_name}")
     message(STATUS "   ${binary_name}\t\t[${CMAKE_BUILD_TYPE}]")
-    FILE(GLOB_RECURSE binary_sources_c *.c) # find all cpp files
-    FILE(GLOB_RECURSE binary_sources_cpp *.cpp) # find all cpp files
-    FILE(GLOB_RECURSE binary_sources_ui *.ui) # find all ui files
-    FILE(GLOB_RECURSE binary_sources_qrc *.qrc) # find all Qt Ressource files
-    FILE(GLOB_RECURSE binary_headers *.hpp) # find all hpp files
+    file(GLOB_RECURSE binary_sources_c *.c) # find all cpp files
+    file(GLOB_RECURSE binary_sources_cpp *.cpp) # find all cpp files
+    file(GLOB_RECURSE binary_sources_ui *.ui) # find all ui files
+    file(GLOB_RECURSE binary_sources_qrc *.qrc) # find all Qt Ressource files
+    file(GLOB_RECURSE binary_headers *.hpp) # find all hpp files
 
     #file(GLOB QT_FORMS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.ui)
     #file(GLOB QT_RESOURCES RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.qrc)
@@ -276,24 +292,29 @@ MACRO(prepare_qt_binary)
     #message(STATUS "        Binary sources: " ${binary_sources})
     #message(STATUS "        Binary headers: " ${binary_headers})
     #message(STATUS "        Global headers: " ${GLOBAL_HEADERS})
-    add_executable( ${binary_name} ${binary_sources_c} ${binary_sources_cpp} ${binary_sources_ui} ${binary_sources_qrc} ${GLOBAL_HEADERS} )
-    target_link_libraries( ${binary_name} ${binary_dependencies} )
+    add_executable(${binary_name}
+                   ${binary_sources_c}
+                   ${binary_sources_cpp}
+                   ${binary_sources_ui}
+                   ${binary_sources_qrc}
+                   ${GLOBAL_HEADERS})
+    target_link_libraries(${binary_name} ${binary_dependencies})
 
-    set_target_properties( ${binary_name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} )
-    set_target_properties( ${binary_name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} )
-    set_target_properties( ${binary_name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} )
+    set_target_properties(${binary_name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+    set_target_properties(${binary_name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+    set_target_properties(${binary_name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 
-    set_target_properties( ${binary_name} PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY} )
-    set_target_properties( ${binary_name} PROPERTIES LIBRARY_OUTPUT_DIRECTORY_DEBUG ${CMAKE_LIBRARY_OUTPUT_DIRECTORY} )
-    set_target_properties( ${binary_name} PROPERTIES LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_LIBRARY_OUTPUT_DIRECTORY} )
-ENDMACRO()
+    set_target_properties(${binary_name} PROPERTIES LIBRARY_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
+    set_target_properties(${binary_name} PROPERTIES LIBRARY_OUTPUT_DIRECTORY_DEBUG ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
+    set_target_properties(${binary_name} PROPERTIES LIBRARY_OUTPUT_DIRECTORY_RELEASE ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
+endmacro()
 
-CMAKE_SRC_DIRECTORIES(SUBDIRS)
+cmake_src_directories(SUBDIRS)
 
 message(STATUS "Adding binaries:")
-FOREACH(subdir ${SUBDIRS})
-  #message(STATUS "   " ${subdir})
-  ADD_SUBDIRECTORY(${subdir})
-  #include_directories(${subdir})
-ENDFOREACH()
+foreach(subdir ${SUBDIRS})
+    #message(STATUS "   " ${subdir})
+    add_subdirectory(${subdir})
+    #include_directories(${subdir})
+endforeach()
 message(STATUS "")

@@ -32,6 +32,9 @@
 /* Include Periphiral drivers */
 #include <IO/IO.hpp>
 #include <PWM/PWM.hpp>
+#include <UART/UART.hpp>
+#include <Debug/Debug.h>
+#include <LSPC/LSPC.hpp>
 
 #include <cmath>
 
@@ -61,11 +64,20 @@ void TestTask(void * pvParameters)
 	PWM led(PWM::TIMER3, PWM::CH1, 500);
     double value = 0;
 
+    UART * uart = new UART(UART::PORT_UART2, 1612800, 100, true); // 1612800
+    LSPC * lspc = new LSPC(uart, LSPC_RECEIVER_PRIORITY, LSPC_TRANSMITTER_PRIORITY);
+    Debug::AssignDebugCOM((void*)lspc);
+
+    uint8_t msg[] = {0xAA};
+
     while (1)
     {
         //led->Toggle();
         led.Set(fmod(value, 1.0));
         value += 0.1;
+        Debug::printf("Value = %1.2f\n", float(value));
+        DEBUG("Test message");
+        lspc->TransmitAsync(lspc::MessageTypesToPC::Test, msg, 1);
         osDelay(500);
     }
 

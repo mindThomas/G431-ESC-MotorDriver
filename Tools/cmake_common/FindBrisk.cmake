@@ -1,4 +1,3 @@
-
 # This is FindBRISK.cmake
 # CMake module to locate the BRISK package
 #
@@ -34,52 +33,61 @@
 
 # Get path suffixes to help look for brisk
 if(BRISK_BUILD_NAME)
-  set(brisk_build_names "${BRISK_BUILD_NAME}/brisk")
+    set(brisk_build_names "${BRISK_BUILD_NAME}/brisk")
 else()
-  # lowercase build type
-  string(TOLOWER "${CMAKE_BUILD_TYPE}" build_type_suffix)
-  # build suffix of this project
-  get_filename_component(my_build_name "${CMAKE_BINARY_DIR}" NAME)
-  
-  set(brisk_build_names "${my_build_name}/brisk" "build-${build_type_suffix}/brisk" "build/brisk")
+    # lowercase build type
+    string(TOLOWER "${CMAKE_BUILD_TYPE}" build_type_suffix)
+    # build suffix of this project
+    get_filename_component(my_build_name "${CMAKE_BINARY_DIR}" NAME)
+
+    set(brisk_build_names "${my_build_name}/brisk" "build-${build_type_suffix}/brisk" "build/brisk")
 endif()
 
 # Use BRISK_ROOT or BRISK_DIR equivalently
 if(BRISK_ROOT AND NOT BRISK_DIR)
-  set(BRISK_DIR "${BRISK_ROOT}")
+    set(BRISK_DIR "${BRISK_ROOT}")
 endif()
 
 if(BRISK_DIR)
-  # Find include dirs
-  find_path(BRISK_INCLUDE_DIR brisk/brisk.h
-    PATHS "${BRISK_DIR}/include" "${BRISK_DIR}" NO_DEFAULT_PATH
-    DOC "BRISK include directories")
+    # Find include dirs
+    find_path(BRISK_INCLUDE_DIR brisk/brisk.h
+              PATHS "${BRISK_DIR}/include" "${BRISK_DIR}"
+              NO_DEFAULT_PATH
+              DOC "BRISK include directories")
 
-  # Find libraries
-  find_library(BRISK_LIBS NAMES brisk
-    HINTS "${BRISK_DIR}/lib" "${BRISK_DIR}" NO_DEFAULT_PATH
-    PATH_SUFFIXES ${brisk_build_names}
-    DOC "BRISK libraries")
+    # Find libraries
+    find_library(BRISK_LIBS
+                 NAMES brisk
+                 HINTS "${BRISK_DIR}/lib" "${BRISK_DIR}"
+                 NO_DEFAULT_PATH
+                 PATH_SUFFIXES ${brisk_build_names}
+                 DOC "BRISK libraries")
 else()
-  # Find include dirs
-  set(extra_include_paths ${CMAKE_INSTALL_PREFIX}/include "$ENV{HOME}/include" "${PROJECT_SOURCE_DIR}/../brisk" /usr/local/include /usr/include)
-  find_path(BRISK_INCLUDE_DIR brisk/brisk.h
-    PATHS ${extra_include_paths}
-    DOC "BRISK include directories")
-  if(NOT BRISK_INCLUDE_DIR)
-    message(STATUS "Searched for brisk headers in default paths plus ${extra_include_paths}")
-  endif()
+    # Find include dirs
+    set(extra_include_paths
+        ${CMAKE_INSTALL_PREFIX}/include
+        "$ENV{HOME}/include"
+        "${PROJECT_SOURCE_DIR}/../brisk"
+        /usr/local/include
+        /usr/include)
+    find_path(BRISK_INCLUDE_DIR brisk/brisk.h PATHS ${extra_include_paths} DOC "BRISK include directories")
+    if(NOT BRISK_INCLUDE_DIR)
+        message(STATUS "Searched for brisk headers in default paths plus ${extra_include_paths}")
+    endif()
 
-  # Find libraries
-  find_library(BRISK_LIBS NAMES brisk
-    HINTS ${CMAKE_INSTALL_PREFIX}/lib "$ENV{HOME}/lib" "${PROJECT_SOURCE_DIR}/../brisk" /usr/local/lib /usr/lib
-    PATH_SUFFIXES ${brisk_build_names}
-    DOC "BRISK libraries")
+    # Find libraries
+    find_library(BRISK_LIBS
+                 NAMES brisk
+                 HINTS ${CMAKE_INSTALL_PREFIX}/lib
+                       "$ENV{HOME}/lib"
+                       "${PROJECT_SOURCE_DIR}/../brisk"
+                       /usr/local/lib
+                       /usr/lib
+                 PATH_SUFFIXES ${brisk_build_names}
+                 DOC "BRISK libraries")
 endif()
 
 # handle the QUIETLY and REQUIRED arguments and set BRISK_FOUND to TRUE
 # if all listed variables are TRUE
 include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(BRISK DEFAULT_MSG
-                                  BRISK_LIBS BRISK_INCLUDE_DIR)
- 
+find_package_handle_standard_args(BRISK DEFAULT_MSG BRISK_LIBS BRISK_INCLUDE_DIR)

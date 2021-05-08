@@ -48,9 +48,11 @@ enable_testing()
 function(spdlog_prepare_test test_target spdlog_lib)
     add_executable(${test_target} ${SPDLOG_UTESTS_SOURCES})
     spdlog_enable_warnings(${test_target})
-    target_link_libraries(${test_target} PRIVATE ${spdlog_lib})
+    target_link_libraries(${test_target}
+                          PRIVATE ${spdlog_lib})
     if(systemd_FOUND)
-        target_link_libraries(${test_target} PRIVATE ${systemd_LIBRARIES})
+        target_link_libraries(${test_target}
+                              PRIVATE ${systemd_LIBRARIES})
     endif()
     if(SPDLOG_SANITIZE_ADDRESS)
         spdlog_enable_sanitizer(${test_target})

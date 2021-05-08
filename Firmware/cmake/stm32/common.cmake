@@ -272,6 +272,12 @@ if(NOT (TARGET STM32::Nano))
     #This custom property is used to check that specs is not set yet on a target linking to this one
     set_property(TARGET STM32::Nano PROPERTY INTERFACE_CUSTOM_GCC_SPECS "NANO")
     set_property(TARGET STM32::Nano APPEND PROPERTY COMPATIBLE_INTERFACE_STRING CUSTOM_GCC_SPECS)
+    target_link_options(STM32::Nano
+                        INTERFACE
+                        $<$<IN_LIST:STM32::NANO_USE_FLOAT,$<TARGET_PROPERTY:LIBRARY_OPTIONS>>:-u
+                        _printf_float>)
+    # Enabled Floating point support in the Newlib Nano libary by adding:
+    # enable_option(your-target STM32::Nano FLOAT)
 endif()
 
 include(stm32/utilities)

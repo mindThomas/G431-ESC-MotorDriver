@@ -45,7 +45,7 @@ void handl(const std::vector<uint8_t>& payload)
     for (int i = 0; i < payload.size(); ++i)
     {
         // ss << " " << std::setw(2) << std::hex << 55;
-        ss << " 0x" << std::setw(2) << std::hex << static_cast<int>(payload[i]);
+        ss << " 0x" << std::setw(2) << std::uppercase << std::hex << static_cast<int>(payload[i]);
     }
     std::cout << ss.str();
     std::cout << std::endl;

@@ -19,7 +19,7 @@
 #include "MainTask.h"
 #include "cmsis_os.h"
 #include "Priorities.h"
-#include "stm32g4xx_hal_timebase_tim.h" // for HAL_GetHighResTick()
+#include <PrecisionSysTick/PrecisionSysTick.h> // for HAL_GetHighResTick()
 
 #include <stdlib.h>
 #include <string.h>

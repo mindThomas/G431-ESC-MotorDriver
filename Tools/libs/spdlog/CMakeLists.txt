@@ -144,12 +144,18 @@ endif()
 add_library(spdlog::spdlog ALIAS spdlog)
 
 target_compile_definitions(spdlog PUBLIC SPDLOG_COMPILED_LIB)
-target_include_directories(spdlog PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>"
-                                         "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
-target_link_libraries(spdlog PUBLIC Threads::Threads)
+target_include_directories(spdlog
+                           PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>"
+                                  "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
+target_link_libraries(spdlog
+                      PUBLIC Threads::Threads)
 spdlog_enable_warnings(spdlog)
 
-set_target_properties(spdlog PROPERTIES VERSION ${SPDLOG_VERSION} SOVERSION ${SPDLOG_VERSION_MAJOR})
+set_target_properties(spdlog
+                      PROPERTIES VERSION
+                                 ${SPDLOG_VERSION}
+                                 SOVERSION
+                                 ${SPDLOG_VERSION_MAJOR})
 #set_target_properties(spdlog PROPERTIES DEBUG_POSTFIX d)
 
 if(COMMAND target_precompile_headers AND SPDLOG_ENABLE_PCH)
@@ -163,27 +169,36 @@ endif()
 add_library(spdlog_header_only INTERFACE)
 add_library(spdlog::spdlog_header_only ALIAS spdlog_header_only)
 
-target_include_directories(spdlog_header_only INTERFACE "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>"
-                                                        "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
-target_link_libraries(spdlog_header_only INTERFACE Threads::Threads)
+target_include_directories(spdlog_header_only
+                           INTERFACE "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>"
+                                     "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
+target_link_libraries(spdlog_header_only
+                      INTERFACE Threads::Threads)
 
 # ---------------------------------------------------------------------------------------
 # Use fmt package if using external fmt
 # ---------------------------------------------------------------------------------------
 if(SPDLOG_FMT_EXTERNAL OR SPDLOG_FMT_EXTERNAL_HO)
     if(NOT TARGET fmt::fmt)
-        find_package(fmt 5.3.0 CONFIG REQUIRED)
+        find_package(fmt
+                     5.3.0
+                     CONFIG
+                     REQUIRED)
     endif()
     target_compile_definitions(spdlog PUBLIC SPDLOG_FMT_EXTERNAL)
     target_compile_definitions(spdlog_header_only INTERFACE SPDLOG_FMT_EXTERNAL)
 
     # use external fmt-header-nly
     if(SPDLOG_FMT_EXTERNAL_HO)
-        target_link_libraries(spdlog PUBLIC fmt::fmt-header-only)
-        target_link_libraries(spdlog_header_only INTERFACE fmt::fmt-header-only)
+        target_link_libraries(spdlog
+                              PUBLIC fmt::fmt-header-only)
+        target_link_libraries(spdlog_header_only
+                              INTERFACE fmt::fmt-header-only)
     else() # use external compile fmt
-        target_link_libraries(spdlog PUBLIC fmt::fmt)
-        target_link_libraries(spdlog_header_only INTERFACE fmt::fmt)
+        target_link_libraries(spdlog
+                              PUBLIC fmt::fmt)
+        target_link_libraries(spdlog_header_only
+                              INTERFACE fmt::fmt)
     endif()
 
     set(PKG_CONFIG_REQUIRES fmt) # add dependency to pkg-config
@@ -193,17 +208,16 @@ endif()
 # Misc definitions according to tweak options
 # ---------------------------------------------------------------------------------------
 set(SPDLOG_WCHAR_TO_UTF8_SUPPORT ${SPDLOG_WCHAR_SUPPORT})
-foreach(
-    SPDLOG_OPTION
-    SPDLOG_WCHAR_TO_UTF8_SUPPORT
-    SPDLOG_WCHAR_FILENAMES
-    SPDLOG_NO_EXCEPTIONS
-    SPDLOG_CLOCK_COARSE
-    SPDLOG_PREVENT_CHILD_FD
-    SPDLOG_NO_THREAD_ID
-    SPDLOG_NO_TLS
-    SPDLOG_NO_ATOMIC_LEVELS
-    SPDLOG_DISABLE_DEFAULT_LOGGER)
+foreach(SPDLOG_OPTION
+        SPDLOG_WCHAR_TO_UTF8_SUPPORT
+        SPDLOG_WCHAR_FILENAMES
+        SPDLOG_NO_EXCEPTIONS
+        SPDLOG_CLOCK_COARSE
+        SPDLOG_PREVENT_CHILD_FD
+        SPDLOG_NO_THREAD_ID
+        SPDLOG_NO_TLS
+        SPDLOG_NO_ATOMIC_LEVELS
+        SPDLOG_DISABLE_DEFAULT_LOGGER)
     if(${SPDLOG_OPTION})
         target_compile_definitions(spdlog PUBLIC ${SPDLOG_OPTION})
         target_compile_definitions(spdlog_header_only INTERFACE ${SPDLOG_OPTION})
@@ -254,12 +268,11 @@ if(SPDLOG_INSTALL)
     # Include files
     # ---------------------------------------------------------------------------------------
     install(DIRECTORY include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}" PATTERN "fmt/bundled" EXCLUDE)
-    install(
-        TARGETS spdlog spdlog_header_only
-        EXPORT spdlog
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    install(TARGETS spdlog spdlog_header_only
+            EXPORT spdlog
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
     if(NOT SPDLOG_FMT_EXTERNAL AND NOT SPDLOG_FMT_EXTERNAL_HO)
         install(DIRECTORY include/${PROJECT_NAME}/fmt/bundled/
@@ -270,7 +283,10 @@ if(SPDLOG_INSTALL)
     # Install pkg-config file
     # ---------------------------------------------------------------------------------------
     get_target_property(PKG_CONFIG_DEFINES spdlog INTERFACE_COMPILE_DEFINITIONS)
-    string(REPLACE ";" " -D" PKG_CONFIG_DEFINES "${PKG_CONFIG_DEFINES}")
+    string(REPLACE ";"
+                   " -D"
+                   PKG_CONFIG_DEFINES
+                   "${PKG_CONFIG_DEFINES}")
     string(CONCAT PKG_CONFIG_DEFINES "-D" "${PKG_CONFIG_DEFINES}")
     configure_file("cmake/${PROJECT_NAME}.pc.in" "${pkg_config}" @ONLY)
     install(FILES "${pkg_config}" DESTINATION "${pkgconfig_install_dir}")

@@ -8,14 +8,14 @@ message(STATUS "OpenCV search path: ${OPENCV_SEARCH_PATH}")
 # check the existance of OpenCV, if not/outdated, install/reinstall
 find_package(OpenCV 3.0 REQUIRED)
 
-if (${OpenCV_FOUND})
-	message(STATUS "OpenCV found")
-	message(STATUS "OpenCV include directory:  ${OpenCV_INCLUDE_DIRS}")
+if(${OpenCV_FOUND})
+    message(STATUS "OpenCV found")
+    message(STATUS "OpenCV include directory:  ${OpenCV_INCLUDE_DIRS}")
 else()
-	find_package(OpenCV 3.0 QUIET)
-	if(NOT OpenCV_FOUND)
-		message(FATAL_ERROR "OpenCV >= 3.0 not found.")
-	endif()
+    find_package(OpenCV 3.0 QUIET)
+    if(NOT OpenCV_FOUND)
+        message(FATAL_ERROR "OpenCV >= 3.0 not found.")
+    endif()
 endif()
 
 # Configure not to use CUDA

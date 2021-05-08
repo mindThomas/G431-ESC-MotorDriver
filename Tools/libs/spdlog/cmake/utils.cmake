@@ -1,19 +1,28 @@
 # Get spdlog version from include/spdlog/version.h and put it in SPDLOG_VERSION
 function(spdlog_extract_version)
     file(READ "${CMAKE_CURRENT_LIST_DIR}/include/spdlog/version.h" file_contents)
-    string(REGEX MATCH "SPDLOG_VER_MAJOR ([0-9]+)" _ "${file_contents}")
+    string(REGEX MATCH
+                 "SPDLOG_VER_MAJOR ([0-9]+)"
+                 _
+                 "${file_contents}")
     if(NOT CMAKE_MATCH_COUNT EQUAL 1)
         message(FATAL_ERROR "Could not extract major version number from spdlog/version.h")
     endif()
     set(ver_major ${CMAKE_MATCH_1})
 
-    string(REGEX MATCH "SPDLOG_VER_MINOR ([0-9]+)" _ "${file_contents}")
+    string(REGEX MATCH
+                 "SPDLOG_VER_MINOR ([0-9]+)"
+                 _
+                 "${file_contents}")
     if(NOT CMAKE_MATCH_COUNT EQUAL 1)
         message(FATAL_ERROR "Could not extract minor version number from spdlog/version.h")
     endif()
 
     set(ver_minor ${CMAKE_MATCH_1})
-    string(REGEX MATCH "SPDLOG_VER_PATCH ([0-9]+)" _ "${file_contents}")
+    string(REGEX MATCH
+                 "SPDLOG_VER_PATCH ([0-9]+)"
+                 _
+                 "${file_contents}")
     if(NOT CMAKE_MATCH_COUNT EQUAL 1)
         message(FATAL_ERROR "Could not extract patch version number from spdlog/version.h")
     endif()
@@ -57,5 +66,6 @@ function(spdlog_enable_sanitizer target_name)
     target_compile_options(${target_name} PRIVATE -fno-sanitize=signed-integer-overflow)
     target_compile_options(${target_name} PRIVATE -fno-sanitize-recover=all)
     target_compile_options(${target_name} PRIVATE -fno-omit-frame-pointer)
-    target_link_libraries(${target_name} PRIVATE -fsanitize=address,undefined -fuse-ld=gold)
+    target_link_libraries(${target_name}
+                          PRIVATE -fsanitize=address,undefined -fuse-ld=gold)
 endfunction()

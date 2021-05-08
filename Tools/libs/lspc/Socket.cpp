@@ -12,9 +12,9 @@
 #include <vector>
 #include <mutex>
 #include <iostream>
-#include <termios.h>
-#include <sys/ioctl.h>
-//#include <asm/termios.h>
+
+//#include <termios.h>
+//#include <sys/ioctl.h>
 
 #include <boost/optional.hpp>
 
@@ -174,36 +174,45 @@ namespace lspc
         if (cfsetspeed(&t, speed) < 0) { throw boost::system::system_error(boost::asio::error::invalid_argument); }
         if (tcsetattr(fd, TCSANOW, &t) < 0) { throw boost::system::system_error(boost::asio::error::invalid_argument); }
     }
+        
+    /* extended termios struct for custom baud rate */
+    // Taken from https://code.woboq.org/qt5/qtserialport/src/serialport/qserialport_unix.cpp.html#_ZL15qt_set_databitsP7termiosN11QSerialPort8DataBitsE
+    struct termios2 {
+        tcflag_t c_iflag;       /* input mode flags */
+        tcflag_t c_oflag;       /* output mode flags */
+        tcflag_t c_cflag;       /* control mode flags */
+        tcflag_t c_lflag;       /* local mode flags */
+        cc_t c_line;            /* line discipline */
+        cc_t c_cc[19];          /* control characters */
+        //cc_t c_cc[NCCS];      /* control characters */
+        speed_t c_ispeed;       /* input speed */
+        speed_t c_ospeed;       /* output speed */
+    };
+    #ifndef TCGETS2
+    #define TCGETS2     _IOR('T', 0x2A, struct termios2)
+    #endif
+    #ifndef TCSETS2
+    #define TCSETS2     _IOW('T', 0x2B, struct termios2)
+    #endif
+    #ifndef BOTHER
+    #define BOTHER      0010000
+    #endif
 
     void setCustomBaudRate(boost::asio::serial_port& p, const size_t speed)
     {
         // See https://stackoverflow.com/questions/12646324/how-can-i-set-a-custom-baud-rate-on-linux
         // And https://gist.github.com/kennethryerson/f7d1abcf2633b7c03cf0
         // And http://www.hce-engineering.com/setting-custom-baud-rate-on-serial-port/
-
-        /* extended termios struct for custom baud rate */
-        struct termios2 {
-            tcflag_t c_iflag;		/* input mode flags */
-            tcflag_t c_oflag;		/* output mode flags */
-            tcflag_t c_cflag;		/* control mode flags */
-            tcflag_t c_lflag;		/* local mode flags */
-            cc_t c_line;			/* line discipline */
-            cc_t c_cc[NCCS];		/* control characters */
-            speed_t c_ispeed;		/* input speed */
-            speed_t c_ospeed;		/* output speed */
-        };
-
-        struct termios2 tio;
         int fd = p.native_handle();
 
-        ioctl(fd, TCGETS2, &tio);
-        tio.c_cflag &= ~CBAUD;
-        tio.c_cflag |= CBAUDEX;//BOTHER;
-        tio.c_ispeed = speed;
-        tio.c_ospeed = speed;
-        ioctl(fd, TCSETS2, &tio);
+        struct termios2 tio2;
+        ioctl(fd, TCGETS2, &tio2);
+        tio2.c_cflag &= ~CBAUD;
+        tio2.c_cflag |= BOTHER;
+        tio2.c_ispeed = speed;
+        tio2.c_ospeed = speed;
+        ioctl(fd, TCSETS2, &tio2);
     }
-
 	void Socket::open(const std::string &com_port_name, const size_t baudRate) {
 		std::lock_guard<std::mutex> lock(resourceMutex_);
 		if (controller_port.is_open()) {

@@ -613,7 +613,7 @@ osEvent osSignalWait (int32_t signals, uint32_t millisec)
     ticks = portMAX_DELAY;
   }
   else if (millisec != 0) {
-    ticks = millisec / portTICK_PERIOD_MS;
+    ticks = (configTICK_RATE_HZ * millisec) / 1000;
     if (ticks == 0) {
       ticks = 1;
     }
@@ -697,7 +697,7 @@ osStatus osMutexWait (osMutexId mutex_id, uint32_t millisec)
     ticks = portMAX_DELAY;
   }
   else if (millisec != 0) {
-    ticks = millisec / portTICK_PERIOD_MS;
+      ticks = (configTICK_RATE_HZ * millisec) / 1000;
     if (ticks == 0) {
       ticks = 1;
     }
@@ -850,7 +850,7 @@ int32_t osSemaphoreWait (osSemaphoreId semaphore_id, uint32_t millisec)
     ticks = portMAX_DELAY;
   }
   else if (millisec != 0) {
-    ticks = millisec / portTICK_PERIOD_MS;
+      ticks = (configTICK_RATE_HZ * millisec) / 1000;
     if (ticks == 0) {
       ticks = 1;
     }
@@ -1130,8 +1130,8 @@ osStatus osMessagePut (osMessageQId queue_id, uint32_t info, uint32_t millisec)
 {
   portBASE_TYPE taskWoken = pdFALSE;
   TickType_t ticks;
-  
-  ticks = millisec / portTICK_PERIOD_MS;
+
+    ticks = (configTICK_RATE_HZ * millisec) / 1000;
   if (ticks == 0) {
     ticks = 1;
   }
@@ -1179,7 +1179,7 @@ osEvent osMessageGet (osMessageQId queue_id, uint32_t millisec)
     ticks = portMAX_DELAY;
   }
   else if (millisec != 0) {
-    ticks = millisec / portTICK_PERIOD_MS;
+    ticks = (configTICK_RATE_HZ * millisec) / 1000;
     if (ticks == 0) {
       ticks = 1;
     }
@@ -1369,7 +1369,7 @@ osEvent osMailGet (osMailQId queue_id, uint32_t millisec)
     ticks = portMAX_DELAY;
   }
   else if (millisec != 0) {
-    ticks = millisec / portTICK_PERIOD_MS;
+    ticks = (configTICK_RATE_HZ * millisec) / 1000;
     if (ticks == 0) {
       ticks = 1;
     }
@@ -1562,7 +1562,7 @@ osStatus osThreadResumeAll (void)
 osStatus osDelayUntil (uint32_t *PreviousWakeTime, uint32_t millisec)
 {
 #if INCLUDE_vTaskDelayUntil
-  TickType_t ticks = (millisec / portTICK_PERIOD_MS);
+  TickType_t ticks = (configTICK_RATE_HZ * millisec) / 1000;
   vTaskDelayUntil((TickType_t *) PreviousWakeTime, ticks ? ticks : 1);
   
   return osOK;
@@ -1631,7 +1631,7 @@ osEvent osMessagePeek (osMessageQId queue_id, uint32_t millisec)
     ticks = portMAX_DELAY;
   }
   else if (millisec != 0) {
-    ticks = millisec / portTICK_PERIOD_MS;
+    ticks = (configTICK_RATE_HZ * millisec) / 1000;
     if (ticks == 0) {
       ticks = 1;
     }

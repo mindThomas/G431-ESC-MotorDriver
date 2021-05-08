@@ -15,9 +15,9 @@ include(stm32/devices)
 include(git_submodule)
 
 define_property(TARGET
-        PROPERTY STARTUP_FILE
-        BRIEF_DOCS "Startup file"
-        FULL_DOCS "Specify Non-default Startup file (override)")
+                PROPERTY STARTUP_FILE
+                BRIEF_DOCS "Startup file"
+                FULL_DOCS "Specify Non-default Startup file (override)")
 
 function(stm32_add_startup_script TARGET SCRIPT)
     get_filename_component(SCRIPT "${SCRIPT}" ABSOLUTE)
@@ -346,8 +346,10 @@ foreach(COMP ${CMSIS_FIND_COMPONENTS})
             list(APPEND CMSIS_LIBRARIES "CMSIS::STM32::${TYPE}${CORE_C}")
             target_link_libraries(CMSIS::STM32::${TYPE}${CORE_C}
                                   INTERFACE CMSIS::STM32::${FAMILY}${CORE_C} STM32::${TYPE}${CORE_D})
-            target_sources(CMSIS::STM32::${TYPE}${CORE_C} INTERFACE
-                $<IF:$<BOOL:$<TARGET_PROPERTY:STARTUP_FILE>>,$<TARGET_PROPERTY:STARTUP_FILE>,${CMSIS_${FAMILY}${CORE_U}_${TYPE}_STARTUP}>)
+            target_sources(
+                CMSIS::STM32::${TYPE}${CORE_C} INTERFACE
+                $<IF:$<BOOL:$<TARGET_PROPERTY:STARTUP_FILE>>,$<TARGET_PROPERTY:STARTUP_FILE>,${CMSIS_${FAMILY}${CORE_U}_${TYPE}_STARTUP}>
+                )
 
             cmsis_generate_openocd_config(${FAMILY} "${FAMILY}${CORE_U}" "CMSIS::STM32::${TYPE}${CORE_C}")
             if(${VERBOSE})
