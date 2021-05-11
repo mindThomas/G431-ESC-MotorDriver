@@ -57,10 +57,10 @@
 #define configUSE_IDLE_HOOK                      0
 #define configUSE_TICK_HOOK                      0
 #define configCPU_CLOCK_HZ                       ( SystemCoreClock )
-#define configTICK_RATE_HZ                       ((TickType_t)10000)
-#define configMAX_PRIORITIES                     ( 7 )
+#define configTICK_RATE_HZ                       ((TickType_t)10000) // This has to
+#define configMAX_PRIORITIES                     ( 11 )
 #define configMINIMAL_STACK_SIZE                 ((uint16_t)64)
-#define configTOTAL_HEAP_SIZE                    ((size_t)25600)
+//#define configTOTAL_HEAP_SIZE                    ((size_t)25600) // This is ignored used when heap_useNewlib.c is used
 #define configMAX_TASK_NAME_LEN                  ( 28 )
 #define configGENERATE_RUN_TIME_STATS            1
 #define configIDLE_SHOULD_YIELD                  1
@@ -139,6 +139,9 @@ standard names. */
 /* Definitions needed when configGENERATE_RUN_TIME_STATS is on */
 #define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS configureTimerForRunTimeStats
 #define portGET_RUN_TIME_COUNTER_VALUE getRunTimeCounterValue
+#define portCONVERT_RUN_TIME_COUNTER_VALUE convertRunTimeCounterValue
+
+extern float portCONVERT_RUN_TIME_COUNTER_VALUE(unsigned long);
 /* USER CODE END 2 */
 
 /* USER CODE BEGIN Defines */   	      

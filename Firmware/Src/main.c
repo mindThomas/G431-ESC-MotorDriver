@@ -53,7 +53,7 @@ int main(void)
   MATLABCoder_initialize();
 
   /* Create the main thread which creates objects and spawns the rest of the threads */
-  xTaskCreate(TestTask, "mainTask", 1024, (void*) NULL, MAIN_TASK_PRIORITY, &mainTaskHandle);
+  xTaskCreate(MainTask, "mainTask", 256, (void*) NULL, MAIN_TASK_PRIORITY, &mainTaskHandle);
 
   /* Start scheduler */
   osKernelStart();

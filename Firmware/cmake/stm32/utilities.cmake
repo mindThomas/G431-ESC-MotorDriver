@@ -26,6 +26,7 @@ function(stm32_util_create_family_targets FAMILY)
                       -fno-common
                       -fmessage-length=0
                       -fstack-usage
+                      #-fdump-ipa-cgraph # dump call graph
                       -Wall
                       #-Wall -Wextra -Wpedantic # Be extra verbose (throw more warning) when compiling
                       #-Werror # report all warnings as errors
@@ -59,7 +60,6 @@ function(stm32_util_create_family_targets FAMILY)
 
         if(${STRIP_UNUSED_CODE})
             target_compile_options(STM32::${FAMILY}${CORE_C} INTERFACE -ffunction-sections -fdata-sections)
-
             target_link_options(STM32::${FAMILY}${CORE_C} INTERFACE -Wl,--gc-sections)
         endif()
     endif()

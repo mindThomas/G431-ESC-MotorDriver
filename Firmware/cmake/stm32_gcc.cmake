@@ -13,6 +13,14 @@ set(CMAKE_EXECUTABLE_SUFFIX_C .elf)
 set(CMAKE_EXECUTABLE_SUFFIX_CXX .elf)
 set(CMAKE_EXECUTABLE_SUFFIX_ASM .elf)
 
+set(CMAKE_C_STANDARD 11) # equivalent to -std=c11
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS ON) # use -std=gnu11 instead of -std=c11
+
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF) # use -std=c++11 instead of -std=gnu++11
+
 # Build type
 if(CMAKE_BUILD_TYPE STREQUAL "")
     unset(CMAKE_BUILD_TYPE CACHE) # no ambiguity
@@ -28,7 +36,7 @@ elseif("${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
     add_compile_options(-Ofast -g)
 elseif("${CMAKE_BUILD_TYPE}" STREQUAL "MinSizeRel")
     message(STATUS "Maximum optimization for size")
-    add_compile_options(-Os)
+    add_compile_options(-Os -s)
 else()
     message(STATUS "Minimal optimization, debug info included")
     add_compile_options(-Og -g)

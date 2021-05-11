@@ -40,7 +40,7 @@
 #include <Debug/Debug.h>
 
 /* Include Device libraries */
-#include "LSPC.hpp"
+#include <LSPC/LSPC.hpp>
 
 /* Include Application-layer libraries */
 
@@ -51,9 +51,10 @@
 #include <NonlinearLeastSquares/NonlinearLeastSquares.hpp>
 #include <FirstOrderLPF/FirstOrderLPF.hpp>
 #include <CircularBuffer/CircularBuffer.hpp>
+#include <CPULoad/CPULoad.hpp>
 
-void CPU_Load(void * pvParameters);
-void TaskRunTimeStats( char *pcWriteBuffer );
+//void CPU_Load(void * pvParameters);
+//void TaskRunTimeStats( char *pcWriteBuffer );
 void UART_TestCallback(void * param, uint8_t * buffer, uint32_t bufLen);
 void CAN_Callback(void * param, const CANBus::package_t& package);
 void SetDutyCycle_Callback(void * param, const std::vector<uint8_t>& data);
@@ -137,17 +138,15 @@ void MainTask(void * pvParameters)
 	UART * uart = new UART(UART::PORT_UART2, 1612800, 100, true);
 	LSPC * lspc = new LSPC(uart, LSPC_RECEIVER_PRIORITY, LSPC_TRANSMITTER_PRIORITY);
 	Debug::AssignDebugCOM((void*)lspc);
+	CPULoad cpuLoad(*lspc, CPULOAD_PRIORITY);
 
-	TaskHandle_t CPULoadTaskHandle;
-	xTaskCreate(CPU_Load, (char *)"CPU Load", 256, (void*) lspc, CPULOAD_PRIORITY, &CPULoadTaskHandle);
+	//TaskHandle_t CPULoadTaskHandle;
+	//xTaskCreate(CPU_Load, (char *)"CPU Load", 256, (void*) lspc, CPULOAD_PRIORITY, &CPULoadTaskHandle);
+
 
 	IO * led = new IO(GPIOC, GPIO_PIN_6);
 	IO * debug = new IO(GPIOA, GPIO_PIN_15);
 	Encoder * encoder = new Encoder(Encoder::TIMER4, true);
-
-#if 0
-	CANBus * can = new CANBus();
-	can->registerCallback(0x55, CAN_Callback);
 
 	Timer * timer = new Timer(Timer::TIMER6, 10000);
 	timer->RegisterInterruptSoft(5, Timer_Callback, led);
@@ -302,124 +301,10 @@ void MainTask(void * pvParameters)
 		osDelay(200);
 #endif
 	}
-#endif
 
 	while (1)
 	{
 		vTaskSuspend(NULL); // suspend this task
-	}
-}
-
-void CPU_Load(void * pvParameters)
-{
-	LSPC * lspc = (LSPC*)pvParameters;
-
-	/* Send CPU load every second */
-	char * pcWriteBuffer = (char *)pvPortMalloc(500); // Approx 40 bytes pr. task
-	while (1)
-	{
-		TaskRunTimeStats(pcWriteBuffer);
-		char * endPtr = &pcWriteBuffer[strlen(pcWriteBuffer)];
-		*endPtr++ = '\n'; *endPtr++ = '\n'; *endPtr++ = 0;
-
-		// Split into multiple packages and send
-		uint16_t txIdx = 0;
-		uint16_t remainingLength = strlen(pcWriteBuffer);
-		uint16_t txLength;
-
-		while (remainingLength > 0) {
-			txLength = remainingLength;
-			if (txLength > LSPC_MAXIMUM_PACKAGE_LENGTH) {
-				txLength = LSPC_MAXIMUM_PACKAGE_LENGTH-1;
-				while (pcWriteBuffer[txIdx+txLength] != '\n' && txLength > 0) txLength--; // find and include line-break (if possible)
-				if (txLength == 0) txLength = LSPC_MAXIMUM_PACKAGE_LENGTH;
-				else txLength++;
-			}
-			lspc->TransmitAsync(lspc::MessageTypesToPC::CPUload, (uint8_t *)&pcWriteBuffer[txIdx], txLength);
-
-			txIdx += txLength;
-			remainingLength -= txLength;
-		}
-
-		osDelay(1000);
-	}
-}
-
-
-static char *WriteTaskNameToBuffer( char *pcBuffer, const char *pcTaskName )
-{
-	size_t x;
-
-	/* Start by copying the entire string. */
-	strcpy( pcBuffer, pcTaskName );
-
-	/* Pad the end of the string with spaces to ensure columns line up when
-	printed out. */
-	for( x = strlen( pcBuffer ); x < ( size_t ) ( configMAX_TASK_NAME_LEN - 1 ); x++ )
-	{
-		pcBuffer[ x ] = ' ';
-	}
-
-	/* Terminate. */
-	pcBuffer[ x ] = 0x00;
-
-	/* Return the new end of string. */
-	return &( pcBuffer[ x ] );
-}
-
-void TaskRunTimeStats( char *pcWriteBuffer )
-{
-	// Based on vTaskGetRunTimeStats
-	static TaskStatus_t *pxTaskStatusArrayPrev = 0;
-	static UBaseType_t uxArraySizePrev = 0;
-	static uint32_t ulTotalTimePrev = 0;
-
-	uint32_t ulTotalTime, ulStatsAsPercentage;
-	TaskStatus_t *pxTaskStatusArray;
-	UBaseType_t uxArraySize;
-
-	*pcWriteBuffer = 0x00; // ensure that we start clean
-
-	uxArraySize = uxTaskGetNumberOfTasks();
-	pxTaskStatusArray = (TaskStatus_t*)pvPortMalloc( uxArraySize * sizeof( TaskStatus_t ) );
-
-	if( pxTaskStatusArray != NULL )
-	{
-		uxArraySize = uxTaskGetSystemState( pxTaskStatusArray, uxArraySize, &ulTotalTime );
-
-		ulTotalTime /= 100UL; // For percentage calculations.
-
-		if( ulTotalTime > 0 && pxTaskStatusArrayPrev )
-		{
-			UBaseType_t x;
-			for( x = 0; x < uxArraySize; x++ )
-			{
-				ulStatsAsPercentage = (pxTaskStatusArray[ x ].ulRunTimeCounter - pxTaskStatusArrayPrev[ x ].ulRunTimeCounter) /
-									  (ulTotalTime - ulTotalTimePrev);
-
-				if (ulStatsAsPercentage > 100)
-					ulStatsAsPercentage = 0;
-
-				pcWriteBuffer = WriteTaskNameToBuffer( pcWriteBuffer, pxTaskStatusArray[ x ].pcTaskName );
-
-				if( ulStatsAsPercentage > 0UL )
-				{
-						sprintf( pcWriteBuffer, "\t%u\t\t%u%%\r\n", ( unsigned int ) pxTaskStatusArray[ x ].ulRunTimeCounter, ( unsigned int ) ulStatsAsPercentage );
-				}
-				else
-				{
-						sprintf( pcWriteBuffer, "\t%u\t\t<1%%\r\n", ( unsigned int ) pxTaskStatusArray[ x ].ulRunTimeCounter );
-				}
-
-				pcWriteBuffer += strlen( pcWriteBuffer );
-			}
-		}
-
-		if (pxTaskStatusArrayPrev)
-			vPortFree( pxTaskStatusArrayPrev );
-		pxTaskStatusArrayPrev = pxTaskStatusArray;
-		uxArraySizePrev = uxArraySize;
-		ulTotalTimePrev = ulTotalTime;
 	}
 }
 

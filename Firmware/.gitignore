@@ -6,7 +6,7 @@ G431-ESC-Firmware_converter.log
 
 # Ignore build folder
 build/
-cmake-build-debug/
+cmake-*/
 .idea/
 .cproject
 .project

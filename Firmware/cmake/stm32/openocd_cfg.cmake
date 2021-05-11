@@ -27,4 +27,10 @@ set CONNECT_UNDER_RESET 1\n\
 source [find target/${OPENOCD_TARGET_CFG}]\n\
 ")
 
+if (${OPENOCD_FREERTOS})
+    set(CONFIG_TEXT "${CONFIG_TEXT}\n\
+    $_TARGETNAME configure -rtos FreeRTOS\n\
+    ")
+endif()
+
 file(WRITE "${OPENOCD_CFG}" "${CONFIG_TEXT}")

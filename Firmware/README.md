@@ -28,3 +28,15 @@ Please note that [CLion](https://www.jetbrains.com/clion/) can be used to load t
 Just select the automatically generated OpenOCD configuration file when creating the __OpenOCD Download & Run__ configuration.
 
 Alternatively VS Code can be used: https://medium.com/@lixis630/getting-started-to-code-embedded-c-on-stm32-e90e7910b2c
+
+## CLion tricks
+To show the content of an array of data given by its pointer, `char * data`, and its length, add the following cast to the watch or evaluation expression:
+```
+(char[8])*data
+```
+
+## FreeRTOS useful variables
+List all tasks, needs a breakpoint after calling `uxTaskGetSystemState` (e.g. in `CPULoad.cpp`)
+```
+(TaskStatus_t[uxCurrentNumberOfTasks])*pxTaskStatusArray
+```

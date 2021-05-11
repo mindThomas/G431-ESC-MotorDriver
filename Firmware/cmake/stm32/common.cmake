@@ -251,9 +251,20 @@ function(stm32_get_memory_info)
     endif()
 endfunction()
 
-function(stm32_add_linker_script TARGET VISIBILITY SCRIPT)
+#function(stm32_add_linker_script TARGET VISIBILITY SCRIPT)
+#    get_filename_component(SCRIPT "${SCRIPT}" ABSOLUTE)
+#    target_link_options(${TARGET} ${VISIBILITY} -T "${SCRIPT}")
+#endfunction()
+
+function(stm32_add_linker_script TARGET SCRIPT)
     get_filename_component(SCRIPT "${SCRIPT}" ABSOLUTE)
-    target_link_options(${TARGET} ${VISIBILITY} -T "${SCRIPT}")
+
+    get_property(TMP TARGET ${TARGET} PROPERTY TYPE)
+    if(TMP STREQUAL "EXECUTABLE")
+        target_link_options(${TARGET} PUBLIC -T "${SCRIPT}")
+    else()
+        target_link_options(${TARGET} INTERFACE -T "${SCRIPT}")
+    endif()
 endfunction()
 
 if(NOT (TARGET STM32::NoSys))

@@ -101,3 +101,36 @@ function(get_mcpu mcpu_out target)
         endif()
     endforeach()
 endfunction()
+
+
+function(get_linked_libraries out_list tgt)
+    if(NOT TARGET ${tgt})
+        message("There is no target named '${tgt}'")
+        return()
+    endif()
+
+    get_property(propval TARGET ${tgt} PROPERTY TYPE)
+    if(NOT propval STREQUAL "EXECUTABLE")
+        message(FATAL_ERROR "Can not use get_linked_libraries on non-executable target '${tgt}' [${propval}]")
+        return()
+    endif()
+
+    get_target_property(LINK_LIBRARIES ${tgt} LINK_LIBRARIES)
+    #list(FILTER LINK_LIBRARIES INCLUDE REGEX "FreeRTOS")
+
+    set(ALL_LINK_LIBRARIES ${LINK_LIBRARIES})
+    foreach(library ${LINK_LIBRARIES})
+        if(NOT TARGET ${library})
+            continue()
+        endif()
+
+        get_property(propval TARGET ${library} PROPERTY INTERFACE_LINK_LIBRARIES SET)
+        if(propval)
+            get_target_property(propval ${library} INTERFACE_LINK_LIBRARIES)
+            list(APPEND ALL_LINK_LIBRARIES ${propval})
+        endif()
+    endforeach(library)
+
+    set(${out_list} ${ALL_LINK_LIBRARIES} PARENT_SCOPE)
+    list(REMOVE_DUPLICATES ${out_list})
+endfunction()

@@ -51,10 +51,10 @@
 #define DEBUG_MESSAGE_PRIORITY			4
 #define TIMER_SOFT_CALLBACK_PRIORITY    5
 #define CURRENT_CONTROLLER_PRIORITY		6
-#define CAN_RECEIVER_PRIORITY			9
-#define UART_RECEIVER_PRIORITY			10
-#define LSPC_RECEIVER_PRIORITY			11
-#define LSPC_TRANSMITTER_PRIORITY		13  // important that this has the highest priority
+#define CAN_RECEIVER_PRIORITY			7
+#define UART_RECEIVER_PRIORITY			8
+#define LSPC_RECEIVER_PRIORITY			9
+#define LSPC_TRANSMITTER_PRIORITY		10  // important that this has the highest priority
 
 
 

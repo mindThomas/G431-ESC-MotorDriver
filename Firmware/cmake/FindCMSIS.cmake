@@ -51,7 +51,7 @@ function(cmsis_generate_default_linker_script FAMILY DEVICE CORE)
                                -DLINKER_SCRIPT="${OUTPUT_LD_FILE}" -P "${STM32_CMAKE_DIR}/stm32/linker_ld.cmake")
     add_custom_target(CMSIS_LD_${DEVICE}${CORE_U} DEPENDS "${OUTPUT_LD_FILE}")
     add_dependencies(CMSIS::STM32::${DEVICE}${CORE_C} CMSIS_LD_${DEVICE}${CORE_U})
-    stm32_add_linker_script(CMSIS::STM32::${DEVICE}${CORE_C} INTERFACE "${OUTPUT_LD_FILE}")
+    stm32_add_linker_script(CMSIS::STM32::${DEVICE}${CORE_C} "${OUTPUT_LD_FILE}")
 endfunction()
 
 function(cmsis_generate_openocd_config FAMILY CONFIG_NAME DEPENDENCY_TO)
@@ -90,6 +90,7 @@ function(cmsis_generate_openocd_config FAMILY CONFIG_NAME DEPENDENCY_TO)
     set(OPENOCD_OUTPUT_CFG "${CMAKE_CURRENT_BINARY_DIR}/OPENOCD_${CONFIG_NAME}.cfg")
     add_custom_command(OUTPUT "${OPENOCD_OUTPUT_CFG}"
                        COMMAND ${CMAKE_COMMAND} -DOPENOCD_CFG="${OPENOCD_OUTPUT_CFG}"
+                               -DOPENOCD_FREERTOS=$<IF:$<BOOL:$<FILTER:$<TARGET_PROPERTY:firmware,LINK_LIBRARIES>,INCLUDE,FreeRTOS>>,1,0>
                                -DOPENOCD_TARGET_CFG="${OPENOCD_TARGET_CFG}" -P
                                "${STM32_CMAKE_DIR}/stm32/openocd_cfg.cmake")
 
@@ -311,6 +312,8 @@ foreach(COMP ${CMSIS_FIND_COMPONENTS})
         cmsis_generate_openocd_config(${FAMILY} "${FAMILY}${CORE_U}" "CMSIS::STM32::${FAMILY}${CORE_C}")
         target_link_directories(CMSIS::STM32::${FAMILY}${CORE_C} INTERFACE
                                 "${CMSIS_${FAMILY}${CORE_U}_CORE_PATH}/DSP/Lib/GCC/")
+        target_include_directories(CMSIS::STM32::${FAMILY}${CORE_C}
+                INTERFACE "${CMSIS_${FAMILY}${CORE_U}_CORE_PATH}/DSP/Include")
         if(${VERBOSE})
             message("Adding generic library CMSIS::STM32::${FAMILY}${CORE_C}")
         endif()

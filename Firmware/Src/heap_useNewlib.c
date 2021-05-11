@@ -266,6 +266,11 @@ size_t xPortGetFreeHeapSize( void ) PRIVILEGED_FUNCTION {
     return mi.fordblks + heapBytesRemaining; // plus space not yet handed to newlib by sbrk
 }
 
+size_t xPortGetTotalHeapSize( void ) PRIVILEGED_FUNCTION {
+    return TotalHeapSize;
+}
+
+
 // GetMinimumEverFree is not available in newlib's malloc implementation.
 // So, no implementation is provided: size_t xPortGetMinimumEverFreeHeapSize( void ) PRIVILEGED_FUNCTION;
 

@@ -50,6 +50,11 @@ if(NOT (TARGET FreeRTOS))
                    "${FreeRTOS_SOURCE_DIR}/queue.c")
     target_include_directories(FreeRTOS INTERFACE "${FreeRTOS_COMMON_INCLUDE}")
     target_compile_definitions(FreeRTOS INTERFACE USE_FREERTOS)
+
+    if (${STRIP_UNUSED_CODE})
+        # Make sure that uxTopUsedPriority remains in the output code to be used by the debugger
+        target_link_options(FreeRTOS INTERFACE "-Wl,--undefined=uxTopUsedPriority")
+    endif()
 endif()
 
 if(NOT (TARGET FreeRTOS::Coroutine))
