@@ -1,5 +1,5 @@
-#include "main.h"
-#include "stm32g4xx_it.h"
+#include "DefaultInterrupts/DefaultInterrupts.h"
+#include "stm32f4xx_hal.h"
 
 #ifdef USE_FREERTOS
 #include "FreeRTOS.h"
@@ -21,6 +21,16 @@ struct xREGISTER_STACK {
 
 volatile struct xREGISTER_STACK *pxRegisterStack = NULL;
 
+
+/**
+  * @brief This function handles Non maskable interrupt.
+  */
+#ifdef DEFAULTINTERRUPTS_USE_SYSTICK
+void SysTick_Handler(void)
+{
+    HAL_IncTick();
+}
+#endif
 
 /**
   * @brief This function handles Non maskable interrupt.

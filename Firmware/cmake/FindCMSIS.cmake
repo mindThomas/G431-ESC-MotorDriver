@@ -54,58 +54,6 @@ function(cmsis_generate_default_linker_script FAMILY DEVICE CORE)
     stm32_add_linker_script(CMSIS::STM32::${DEVICE}${CORE_C} "${OUTPUT_LD_FILE}")
 endfunction()
 
-function(cmsis_generate_openocd_config FAMILY CONFIG_NAME DEPENDENCY_TO)
-    find_program(OPENOCD_BIN "openocd")
-    if(NOT OPENOCD_BIN)
-        return()
-    endif()
-    get_filename_component(OPENOCD_PATH ${OPENOCD_BIN} DIRECTORY)
-    get_filename_component(OPENOCD_PATH ${OPENOCD_PATH} DIRECTORY)
-
-    if(TARGET OPENOCD_${CONFIG_NAME})
-        add_dependencies(${DEPENDENCY_TO} OPENOCD_${CONFIG_NAME})
-        return()
-    endif()
-
-    string(TOLOWER ${FAMILY} FAMILY_L)
-    #    find_file(OPENOCD_TARGET_CFG
-    #            NAMES stm32${FAMILY_L}x.cfg
-    #            PATHS "${OPENOCD_PATH}/scripts/target"
-    #            NO_DEFAULT_PATH
-    #            )
-
-    if(EXISTS "${OPENOCD_PATH}/scripts/target/stm32${FAMILY_L}x.cfg")
-        set(OPENOCD_TARGET_CFG stm32${FAMILY_L}x.cfg)
-    elseif(EXISTS "${OPENOCD_PATH}/scripts/target/stm32${FAMILY_L}.cfg")
-        set(OPENOCD_TARGET_CFG stm32${FAMILY_L}.cfg)
-    else()
-        return()
-    endif()
-
-    if(${VERBOSE})
-        message("Adding OpenOCD config OPENOCD_${CONFIG_NAME} as dependency to ${DEPENDENCY_TO}")
-    endif()
-
-    #set(OPENOCD_OUTPUT_CFG "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}_openocd.cfg")
-    set(OPENOCD_OUTPUT_CFG "${CMAKE_CURRENT_BINARY_DIR}/OPENOCD_${CONFIG_NAME}.cfg")
-    add_custom_command(OUTPUT "${OPENOCD_OUTPUT_CFG}"
-                       COMMAND ${CMAKE_COMMAND} -DOPENOCD_CFG="${OPENOCD_OUTPUT_CFG}"
-                               -DOPENOCD_FREERTOS=$<IF:$<BOOL:$<FILTER:$<TARGET_PROPERTY:firmware,LINK_LIBRARIES>,INCLUDE,FreeRTOS>>,1,0>
-                               -DOPENOCD_TARGET_CFG="${OPENOCD_TARGET_CFG}" -P
-                               "${STM32_CMAKE_DIR}/stm32/openocd_cfg.cmake")
-
-    add_custom_target(OPENOCD_${CONFIG_NAME} DEPENDS "${OPENOCD_OUTPUT_CFG}")
-    add_dependencies(${DEPENDENCY_TO} OPENOCD_${CONFIG_NAME})
-    #stm32_add_linker_script(CMSIS::STM32::${DEVICE}${CORE_C} INTERFACE "${OUTPUT_LD_FILE}")
-
-    #define_property(TARGET PROPERTY DEVICE BRIEF_DOCS "Device name" FULL_DOCS "Device name")
-    #set_property(TARGET CMSIS::STM32::${DEVICE}${CORE_C} PROPERTY DEVICE ${DEVICE})
-
-    #get_filename_component(SCRIPT "${SCRIPT}" ABSOLUTE)
-    #target_link_options(${TARGET} ${VISIBILITY} -T "${SCRIPT}")
-    #set_property(TARGET CMSIS::STM32::${DEVICE}${CORE_C} PROPERTY OPENOCD "${OPENOCD_OUTPUT_CFG}")
-endfunction()
-
 function(load_from_environment VARIABLE)
     if(NOT ${VARIABLE} AND DEFINED ENV{${VARIABLE}})
         set(${VARIABLE} $ENV{${VARIABLE}} PARENT_SCOPE)
@@ -309,7 +257,6 @@ foreach(COMP ${CMSIS_FIND_COMPONENTS})
         target_include_directories(CMSIS::STM32::${FAMILY}${CORE_C}
                                    INTERFACE "${CMSIS_${FAMILY}${CORE_U}_PATH}/Include")
         target_sources(CMSIS::STM32::${FAMILY}${CORE_C} INTERFACE "${CMSIS_${FAMILY}${CORE_U}_SOURCE}")
-        cmsis_generate_openocd_config(${FAMILY} "${FAMILY}${CORE_U}" "CMSIS::STM32::${FAMILY}${CORE_C}")
         target_link_directories(CMSIS::STM32::${FAMILY}${CORE_C} INTERFACE
                                 "${CMSIS_${FAMILY}${CORE_U}_CORE_PATH}/DSP/Lib/GCC/")
         target_include_directories(CMSIS::STM32::${FAMILY}${CORE_C}
@@ -354,7 +301,6 @@ foreach(COMP ${CMSIS_FIND_COMPONENTS})
                 $<IF:$<BOOL:$<TARGET_PROPERTY:STARTUP_FILE>>,$<TARGET_PROPERTY:STARTUP_FILE>,${CMSIS_${FAMILY}${CORE_U}_${TYPE}_STARTUP}>
                 )
 
-            cmsis_generate_openocd_config(${FAMILY} "${FAMILY}${CORE_U}" "CMSIS::STM32::${TYPE}${CORE_C}")
             if(${VERBOSE})
                 message("Adding library CMSIS::STM32::${TYPE}${CORE_C} with startup file")
             endif()
@@ -365,7 +311,6 @@ foreach(COMP ${CMSIS_FIND_COMPONENTS})
         target_link_libraries(CMSIS::STM32::${DEVICE}${CORE_C}
                               INTERFACE CMSIS::STM32::${TYPE}${CORE_C})
         cmsis_generate_default_linker_script(${FAMILY} ${DEVICE} "${CORE}")
-        cmsis_generate_openocd_config(${FAMILY} "${FAMILY}${CORE_U}" "CMSIS::STM32::${DEVICE}${CORE_C}")
         if(${VERBOSE})
             message("Adding library CMSIS::STM32::${DEVICE}${CORE_C} with startup and linker file")
         endif()

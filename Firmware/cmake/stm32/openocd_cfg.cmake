@@ -28,9 +28,13 @@ source [find target/${OPENOCD_TARGET_CFG}]\n\
 ")
 
 if (${OPENOCD_FREERTOS})
-    set(CONFIG_TEXT "${CONFIG_TEXT}\n\
+set(CONFIG_TEXT "${CONFIG_TEXT}\n\
+if { [info exists _TARGETNAME] } {\n\
     $_TARGETNAME configure -rtos FreeRTOS\n\
-    ")
+} elseif { [info exists $_CHIPNAME.cpu0] } {\n\
+    $_CHIPNAME.cpu0 configure -rtos FreeRTOS\n\
+}
+")
 endif()
 
 file(WRITE "${OPENOCD_CFG}" "${CONFIG_TEXT}")
