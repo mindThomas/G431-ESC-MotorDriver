@@ -112,16 +112,25 @@ function(stm32_add_flash_target TARGET)
                 -c
                 "exit" # exit, resume or shutdown
                 WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-                DEPENDS ${OPENOCD_CFG} $<TARGET_FILE:${TARGET}>)
+                DEPENDS ${OPENOCD_CFG} ${TARGET} $<TARGET_FILE:${TARGET}>)
 
         add_custom_target(openocd_${TARGET}
                 COMMAND ${OPENOCD_BIN}
-                -f ${OPENOCD_CFG}$<$<BOOL:$<FILTER:$<TARGET_PROPERTY:${TARGET},LINK_LIBRARIES>,INCLUDE,FreeRTOS>>:_FREERTOS>.cfg
+                -f ${OPENOCD_OUTPUT_CFG}
                 -c "gdb_memory_map disable"
                 WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-                DEPENDS ${OPENOCD_CFG} $<TARGET_FILE:${TARGET}>)
+                DEPENDS ${OPENOCD_CFG} ${TARGET} $<TARGET_FILE:${TARGET}>)
         # cmake-format: on
     endif ()
+
+    # Find dfu-util (http://dfu-util.sourceforge.net/dfuse.html) for flashing DFU-enabled devices over USB
+    find_program(DFU_UTIL_BIN "dfu-util")
+    if (DFU_UTIL_BIN)
+        add_custom_target(dfu_${TARGET}
+                COMMAND ${DFU_UTIL_BIN} -a 0 -i 0 -s 0x08000000:leave -D ${CMAKE_CURRENT_BINARY_DIR}/${TARGET}.bin
+                WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+                DEPENDS ${TARGET}_bin)
+    endif()
 endfunction()
 
 function(stm32_add_gdb_target TARGET)
@@ -149,7 +158,7 @@ function(stm32_convert_to_hex TARGET)
             COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:${TARGET}>
             $<TARGET_FILE_DIR:${TARGET}>/${TARGET}.hex
             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-            DEPENDS $<TARGET_FILE:${TARGET}>
+            DEPENDS ${TARGET} $<TARGET_FILE:${TARGET}>
             COMMENT "Generating HEX file for ${TARGET}")
     set_property(
             TARGET ${TARGET}
@@ -167,12 +176,12 @@ function(stm32_convert_to_binary TARGET)
     add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}.bin"
             COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:${TARGET}>
             $<TARGET_FILE_DIR:${TARGET}>/${TARGET}.bin
-            COMMENT "Generating HEX file for ${TARGET}")
+            COMMENT "Generating BIN file for ${TARGET}")
     add_custom_target(${TARGET}_bin
             COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:${TARGET}>
             $<TARGET_FILE_DIR:${TARGET}>/${TARGET}.bin
             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-            DEPENDS $<TARGET_FILE:${TARGET}>
+            DEPENDS ${TARGET} $<TARGET_FILE:${TARGET}>
             COMMENT "Generating BIN file for ${TARGET}")
     set_property(
             TARGET ${TARGET}
