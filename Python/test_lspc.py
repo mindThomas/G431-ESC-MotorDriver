@@ -8,16 +8,19 @@
 #   cu -s 9600 -l /dev/ttyS18
 # To exit press ~~.   (escape character in cu is ~)
 
+
 def Callback(data, params):
     lspc = params
     lspc.transmit(0x02, data)
     print(data)
 
-import lspc
+
 import time
 
-#packet_data = bytearray((0x00, 0x01, 0x05, 0x05, 0xDD, 0xFF, 0xFF, 0xFF))
-#packet = lspc.Packet(packet_data)
+import lspc
+
+# packet_data = bytearray((0x00, 0x01, 0x05, 0x05, 0xDD, 0xFF, 0xFF, 0xFF))
+# packet = lspc.Packet(packet_data)
 
 ports = lspc.list_serial_ports()
 a = lspc.LSPC(ports[1])
@@ -28,9 +31,9 @@ a.open()
 time.sleep(3)
 a.close()
 
-#ports = lspc.list_serial_ports()
-#b = lspc.LSPC(ports[1])
+# ports = lspc.list_serial_ports()
+# b = lspc.LSPC(ports[1])
 
 #%%
-#a.ser.close()
-#b.ser.close()
+# a.ser.close()
+# b.ser.close()
