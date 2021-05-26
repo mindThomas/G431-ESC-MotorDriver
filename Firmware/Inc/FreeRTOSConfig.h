@@ -60,8 +60,8 @@
 #define configTICK_RATE_HZ                       ((TickType_t)10000) // This has to
 #define configMAX_PRIORITIES                     ( 11 )
 #define configMINIMAL_STACK_SIZE                 ((uint16_t)64)
-//#define configTOTAL_HEAP_SIZE                    ((size_t)25600) // This is ignored used when heap_useNewlib.c is used
-#define configMAX_TASK_NAME_LEN                  ( 28 )
+#define configTOTAL_HEAP_SIZE                    ((size_t)28000) // This is ignored used when FreeRTOS::Heap::Newlib is used
+#define configMAX_TASK_NAME_LEN                  ( 22 )
 #define configGENERATE_RUN_TIME_STATS            1
 #define configIDLE_SHOULD_YIELD                  1
 #define configUSE_TRACE_FACILITY                 1

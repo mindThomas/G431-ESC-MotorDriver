@@ -1,5 +1,5 @@
 #include "DefaultInterrupts/DefaultInterrupts.h"
-#include "stm32f4xx_hal.h"
+#include "stm32_hal.h" // Generic HAL include
 
 #ifdef USE_FREERTOS
 #include "FreeRTOS.h"
@@ -44,9 +44,7 @@ void NMI_Handler(void)
   */
 void MemManage_Handler(void)
 {
-  while (1)
-  {
-  }
+    while(1) { __asm("bkpt #0"); }; // If debugging stop here as if there was a breakpoint, otherwise loop forever)
 }
 
 /**
@@ -54,9 +52,7 @@ void MemManage_Handler(void)
   */
 void BusFault_Handler(void)
 {
-  while (1)
-  {
-  }
+    while(1) { __asm("bkpt #0"); }; // If debugging stop here as if there was a breakpoint, otherwise loop forever)
 }
 
 /**
@@ -64,9 +60,7 @@ void BusFault_Handler(void)
   */
 void UsageFault_Handler(void)
 {
-  while (1)
-  {
-  }
+    while(1) { __asm("bkpt #0"); }; // If debugging stop here as if there was a breakpoint, otherwise loop forever)
 }
 
 /**
@@ -150,15 +144,18 @@ void prvGetRegistersFromStack( uint32_t *pulFaultStackAddress )
     pc = pulFaultStackAddress[ 6 ];
     psr = pulFaultStackAddress[ 7 ];
 
-    if (lr == 0) // no return address, probably a hard-fault due to reset back from DFU bootloader
-		NVIC_SystemReset();
+    if (lr == 0) {
+        // no return address, probably a hard-fault due to reset back from DFU bootloader
+        NVIC_SystemReset();
+    }
 
     /* When the following line is hit, the variables contain the register values. */
-    for( ;; );
+    while(1) { __asm("bkpt #0"); }; // If debugging stop here as if there was a breakpoint, otherwise loop forever)
 }
 
 void DisableHardware(void)
 {
+    __disable_irq(); // Disable interrupts
 #ifdef __HAL_RCC_TIM1_CLK_DISABLE
 	__HAL_RCC_TIM1_CLK_DISABLE();
 #endif
@@ -190,24 +187,31 @@ void DisableHardware(void)
 	__HAL_RCC_TIM17_CLK_DISABLE();
 #endif
 #ifdef __HAL_RCC_GPIOA_CLK_DISABLE
+    GPIOA->MODER = 0xABFFFFFF; // reset state (to include JTAG lines)
 	__HAL_RCC_GPIOA_CLK_DISABLE();
 #endif
 #ifdef __HAL_RCC_GPIOB_CLK_DISABLE
+    GPIOB->MODER = 0xFFFFFEBF; // reset state (to include JTAG lines)
 	__HAL_RCC_GPIOB_CLK_DISABLE();
 #endif
 #ifdef __HAL_RCC_GPIOC_CLK_DISABLE
+    GPIOC->MODER = 0xFFFFFFFF; // reset state
 	__HAL_RCC_GPIOC_CLK_DISABLE();
 #endif
 #ifdef __HAL_RCC_GPIOD_CLK_DISABLE
+    GPIOD->MODER = 0xFFFFFFFF; // reset state
 	__HAL_RCC_GPIOD_CLK_DISABLE();
 #endif
 #ifdef __HAL_RCC_GPIOE_CLK_DISABLE
+    GPIOE->MODER = 0xFFFFFFFF; // reset state
 	__HAL_RCC_GPIOE_CLK_DISABLE();
 #endif
 #ifdef __HAL_RCC_GPIOF_CLK_DISABLE
+    GPIOF->MODER = 0xFFFFFFFF; // reset state
 	__HAL_RCC_GPIOF_CLK_DISABLE();
 #endif
 #ifdef __HAL_RCC_GPIOG_CLK_DISABLE
+    GPIOG->MODER = 0xFFFFFFFF; // reset state
 	__HAL_RCC_GPIOG_CLK_DISABLE();
 #endif
 #ifdef __HAL_RCC_USART1_CLK_DISABLE
@@ -258,12 +262,12 @@ void vApplicationStackOverflowHook( TaskHandle_t xTask, signed char *pcTaskName 
 	StackOverflowTaskName = pcTaskName;
 
 	DisableHardware();
-    for( ;; );
+    while(1) { __asm("bkpt #0"); }; // If debugging stop here as if there was a breakpoint, otherwise loop forever)
 }
 
 void vApplicationMallocFailedHook( void )
 {
 	DisableHardware();
-	for( ;; );
+    while(1) { __asm("bkpt #0"); }; // If debugging stop here as if there was a breakpoint, otherwise loop forever)
 }
 #endif

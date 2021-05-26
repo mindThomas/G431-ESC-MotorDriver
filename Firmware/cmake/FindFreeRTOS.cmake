@@ -50,11 +50,6 @@ if(NOT (TARGET FreeRTOS))
                    "${FreeRTOS_SOURCE_DIR}/queue.c")
     target_include_directories(FreeRTOS INTERFACE "${FreeRTOS_COMMON_INCLUDE}")
     target_compile_definitions(FreeRTOS INTERFACE USE_FREERTOS)
-
-    if (${STRIP_UNUSED_CODE})
-        # Make sure that uxTopUsedPriority remains in the output code to be used by the debugger
-        target_link_options(FreeRTOS INTERFACE "-Wl,--undefined=uxTopUsedPriority")
-    endif()
 endif()
 
 if(NOT (TARGET FreeRTOS::Coroutine))
@@ -102,8 +97,48 @@ foreach(HEAP ${FreeRTOS_HEAPS})
         target_sources(FreeRTOS::Heap::${HEAP} INTERFACE "${FreeRTOS_SOURCE_DIR}/portable/MemMang/heap_${HEAP}.c")
         target_link_libraries(FreeRTOS::Heap::${HEAP}
                               INTERFACE FreeRTOS)
+        if (TARGET Sysmem)
+            target_link_libraries(FreeRTOS::Heap::${HEAP} INTERFACE Sysmem)
+        endif()
     endif()
 endforeach()
+
+# Add FreeRTOS::Heap::Newlib
+if(NOT (TARGET FreeRTOS::Heap::Newlib))
+    add_library(FreeRTOS::Heap::Newlib INTERFACE IMPORTED)
+    target_sources(FreeRTOS::Heap::Newlib INTERFACE "${CMAKE_CURRENT_LIST_DIR}/misc/FreeRTOS_Heap_Newlib/heap_newlib.c")
+    target_sources(FreeRTOS::Heap::Newlib INTERFACE "${CMAKE_CURRENT_LIST_DIR}/misc/FreeRTOS_Heap_Newlib/mallocTracker.cpp")
+    target_include_directories(FreeRTOS::Heap::Newlib INTERFACE "${CMAKE_CURRENT_LIST_DIR}/misc/FreeRTOS_Heap_Newlib")
+    target_link_libraries(FreeRTOS::Heap::Newlib INTERFACE FreeRTOS)
+    target_compile_definitions(FreeRTOS::Heap::Newlib INTERFACE FREERTOS_USE_NEWLIB)
+    target_compile_definitions(FreeRTOS::Heap::Newlib INTERFACE configUSE_NEWLIB_REENTRANT)
+    target_compile_definitions(FreeRTOS::Heap::Newlib INTERFACE _REENT_SMALL) # reduce size of reentry in FreeRTOS TCB
+
+endif()
+
+# Add FreeRTOS::OpenOCD
+if(NOT (TARGET FreeRTOS::OpenOCD))
+    add_library(FreeRTOS::OpenOCD INTERFACE IMPORTED)
+    target_sources(FreeRTOS::OpenOCD INTERFACE "${CMAKE_CURRENT_LIST_DIR}/misc/FreeRTOS_OpenOCD/FreeRTOS_OpenOCD.c")
+    target_link_libraries(FreeRTOS::OpenOCD INTERFACE FreeRTOS)
+    target_include_directories(FreeRTOS::OpenOCD INTERFACE ${CMAKE_CURRENT_LIST_DIR}/misc/FreeRTOS_OpenOCD)
+    target_compile_definitions(FreeRTOS::OpenOCD INTERFACE "configINCLUDE_FREERTOS_TASK_C_ADDITIONS_H=1")
+    if (${STRIP_UNUSED_CODE})
+        # Make sure that uxTopUsedPriority remains in the output code to be used by the debugger
+        target_link_options(FreeRTOS::OpenOCD INTERFACE "-Wl,--undefined=uxTopUsedPriority")
+    endif()
+endif()
+
+# Add FreeRTOS::MallocOverload
+if(NOT (TARGET FreeRTOS::MallocOverload))
+    add_library(FreeRTOS::MallocOverload INTERFACE IMPORTED)
+    target_sources(FreeRTOS::MallocOverload INTERFACE "${CMAKE_CURRENT_LIST_DIR}/misc/FreeRTOS_MallocOverload/MallocOverload.c")
+    target_link_libraries(FreeRTOS::MallocOverload INTERFACE FreeRTOS)
+    target_link_options(FreeRTOS::MallocOverload INTERFACE "-Wl,--wrap=malloc")
+    target_link_options(FreeRTOS::MallocOverload INTERFACE "-Wl,--wrap=_malloc_r")
+    target_link_options(FreeRTOS::MallocOverload INTERFACE "-Wl,--wrap=free")
+    target_link_options(FreeRTOS::MallocOverload INTERFACE "-Wl,--wrap=_free_r")
+endif()
 
 foreach(PORT ${FreeRTOS_FIND_COMPONENTS})
     find_path(FreeRTOS_${PORT}_PATH

@@ -51,7 +51,8 @@ function(cmsis_generate_default_linker_script FAMILY DEVICE CORE)
                                -DLINKER_SCRIPT="${OUTPUT_LD_FILE}" -P "${STM32_CMAKE_DIR}/stm32/linker_ld.cmake")
     add_custom_target(CMSIS_LD_${DEVICE}${CORE_U} DEPENDS "${OUTPUT_LD_FILE}")
     add_dependencies(CMSIS::STM32::${DEVICE}${CORE_C} CMSIS_LD_${DEVICE}${CORE_U})
-    stm32_add_linker_script(CMSIS::STM32::${DEVICE}${CORE_C} "${OUTPUT_LD_FILE}")
+    # Support overriding automatic linker file with stm32_add_linker_script function
+    target_link_options(CMSIS::STM32::${DEVICE}${CORE_C} INTERFACE -T $<IF:$<BOOL:$<TARGET_PROPERTY:LINKER_FILE>>,$<TARGET_PROPERTY:LINKER_FILE>,${OUTPUT_LD_FILE}>)
 endfunction()
 
 function(load_from_environment VARIABLE)

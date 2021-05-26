@@ -126,7 +126,7 @@ int main(int argc, char** argv)
         }
     }
 
-    std::shared_ptr<std::ofstream> sensorsFile = std::make_shared<std::ofstream>();
+    std::shared_ptr<std::ofstream> dumpFile = std::make_shared<std::ofstream>();
 
     while (!shouldExit) {
         { // create scope wherein the lspc object is created - this enforces destruction if connection is lost
@@ -144,15 +144,16 @@ int main(int argc, char** argv)
             if (shouldExit) break;
 
             std::string dumpFilename = utils::GetFormattedTimestampCurrent() + ".txt";
-            sensorsFile->open(std::string(getenv("HOME")) + "/esc_logs/" + dumpFilename, std::ofstream::trunc);
-            std::cout << "Created mathdump file: ~/esc_logs/" << dumpFilename << std::endl;
+            dumpFile->open(std::string(getenv("HOME")) + "/esc_logs/" + dumpFilename, std::ofstream::trunc);
+            std::cout << "Created dump file: ~/esc_logs/" << dumpFilename << std::endl;
 
             std::cout << "Connected to ESC" << std::endl;
             boost::thread testThread = boost::thread(boost::bind(&TestThread, boost::ref(lspc)));
 
             lspc.registerCallback(lspc::MessageTypesToPC::Test, &handl);
             lspc.registerCallback(lspc::MessageTypesToPC::CPUload, &debugHandler);
-            lspc.registerCallback(lspc::MessageTypesToPC::Sensors, boost::bind(&LSPC_Callback_Sensors, sensorsFile, _1));
+            //lspc.registerCallback(lspc::MessageTypesToPC::Sensors, boost::bind(&LSPC_Callback_Sensors, dumpFile, _1));
+            lspc.registerCallback(lspc::MessageTypesToPC::Sensors, boost::bind(&LSPC_Callback_ArrayDump, dumpFile, _1));
             lspc.registerCallback(lspc::MessageTypesToPC::Debug, &debugHandler);
 
             while (lspc.isOpen() && !shouldExit) {
@@ -161,7 +162,7 @@ int main(int argc, char** argv)
             if (testThread.joinable())
                 testThread.join();
 
-            sensorsFile->close();
+            dumpFile->close();
 
             if (shouldExit)
                 break;

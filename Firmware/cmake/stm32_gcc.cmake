@@ -15,7 +15,7 @@ set(CMAKE_EXECUTABLE_SUFFIX_ASM .elf)
 
 set(CMAKE_C_STANDARD 11) # equivalent to -std=c11
 set(CMAKE_C_STANDARD_REQUIRED ON)
-set(CMAKE_C_EXTENSIONS ON) # use -std=gnu11 instead of -std=c11
+set(CMAKE_C_EXTENSIONS OFF) # use -std=gnu11 instead of -std=c11
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

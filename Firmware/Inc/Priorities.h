@@ -25,9 +25,11 @@
  * Remember to respect the "configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY" in FreeRTOSConfig.h, hence no hardware interrupt calling FreeRTOS functions must have a priority value lower than configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY
  */
 #define HIGH_RES_TIMER_TICK_PRIORITY	0		// This timer is also used to generate ticks for any ST HAL library (eg. HAL_Delay)
+#define SHORT_HIGH_PRIORITY_TIMER_INTERRUPT_PRIORITY 1
 #define ENCODER_TIMER_OVERFLOW_PRIORITY	1
 #define INPUT_CAPTURE_INTERRUPT_PRIORITY	2
-#define ADC_DMA_INTERRUPT_PRIORITY		15
+#define ADC_DMA_INTERRUPT_PRIORITY		3
+#define SAMPLING_TRIGGER_TIMER_INTERRUPT_PRIORITY 4
 
 // Below are periphiral priorities which uses FreeRTOS functions
 #define CAN_INTERRUPT_PRIORITY		5
@@ -48,7 +50,7 @@
 #define APPLICATION_TEMPLATE_PRIORITY	0
 #define CPULOAD_PRIORITY				1
 #define CALIBRATION_SWEEP_PRIORITY		2
-#define DEBUG_MESSAGE_PRIORITY			4
+#define DEBUG_MESSAGE_PRIORITY			4  // tasks requiring debug messages to be packed should have a higher priority than this
 #define TIMER_SOFT_CALLBACK_PRIORITY    5
 #define CURRENT_CONTROLLER_PRIORITY		6
 #define CAN_RECEIVER_PRIORITY			7

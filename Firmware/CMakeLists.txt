@@ -30,15 +30,15 @@ add_subdirectory(../Common "Common")
 
 add_executable(firmware
                Src/main.c
-               Src/syscalls.c
-               Src/freertos.c
+               #Src/syscalls.c
+               #Src/freertos.c
                Src/ProcessorInit.c
                Src/stm32g4xx_hal_msp.c
-               Src/stm32g4xx_it.c
+               #Src/stm32g4xx_it.c
                #Src/TestTask.cpp
-               Src/heap_useNewlib.c # Src/MemoryManagement.c
+               #Src/heap_useNewlib.c # Src/MemoryManagement.c
                Src/MainTask.cpp
-               Src/FreeRTOS-openocd.c
+               #Src/FreeRTOS-openocd.c
                )
 include_directories(Inc)
 target_link_libraries(firmware PRIVATE
@@ -56,7 +56,10 @@ target_link_libraries(firmware PRIVATE
                       FreeRTOS::ARM_CM4F # defines USE_FREERTOS
                       FreeRTOS::Timers
                       #FreeRTOS::Heap::4
+                      FreeRTOS::Heap::Newlib
                       #FreeRTOS::CMSIS # defines USE_FREERTOS_CMSIS
+                      FreeRTOS::OpenOCD
+                      #FreeRTOS::MallocOverload
                       # Periphiral libraries
                       STM32G4_CANBus
                       STM32G4_Encoder
@@ -73,9 +76,16 @@ target_link_libraries(firmware PRIVATE
         Matrix
         LeastSquares
         FirstOrderLPF
-        CPULoad)
-#stm32_add_linker_script(firmware PRIVATE STM32G431CBUx_FLASH.ld)
+        CPULoad
+        Syscalls
+        #Sysmem
+        DefaultInterrupts
+        )
+
+#stm32_add_linker_script(firmware Src/G431CB.ld) # override linker file
 stm32_add_startup_script(firmware Src/startup_stm32g431xx.s) # override default startup file
+
+target_compile_definitions(firmware PUBLIC FREERTOS_USE_NEWLIB)
 
 # Enable Floating point support in the Newlib Nano libary (STM32::Nano) - takes up roughly 8 KB of FLASH
 enable_option(firmware STM32::Nano FLOAT)
@@ -86,6 +96,7 @@ target_sources(firmware PUBLIC Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTO
 target_compile_definitions(firmware PUBLIC USE_FREERTOS_CMSIS)
 
 target_compile_definitions(firmware PUBLIC HSE_VALUE=8000000)
+set_configurable_option(firmware STM32G4_PrecisionSysTick FREQUENCY 100000) # OBS! Precision systick is used for task timing in CPU Load, so it should be equal to or faster than the FreeRTOS tick rate of 10 KHz
 
 target_compile_options(firmware
                        PUBLIC "-Wdouble-promotion"
@@ -94,17 +105,16 @@ target_compile_options(firmware
 
 target_compile_options(firmware PUBLIC "-Wstack-usage=256") # Warning at stack usage above 256 bytes
 
-include(print_target_properties)
-print_target_properties(firmware)
-
-#enable_option(stm32-freertos STM32H7_IO "DEBUG") # defines the symbol: "STM32H7_IO_USE_DEBUG"
-#set_configurable_option(stm32-freertos STM32H7_PRECISION_SYSTICK FREQUENCY 10000)
-#set_configurable_option(stm32-freertos STM32H7_USBCDC DEVICE_NAME "My STM32")
+#include(print_target_properties)
+#print_target_properties(firmware)
 
 enable_option(firmware LSPC  UART)
+set_configurable_option(firmware LSPC TX_QUEUE_LENGTH 50)
 enable_option(firmware Debug LSPC)
 enable_option(firmware Debug PRINTF)
-enable_option(firmware CPULoad VERBOSE)
+#enable_option(firmware CPULoad VERBOSE)
+#enable_option(firmware STM32G4_IO DEBUG)
+enable_option(firmware STM32G4_SyncedPWMADC DEBUG)
 
 #get_linked_libraries(OUT firmware)
 #message("Linked libraries = ${OUT}")
@@ -118,3 +128,10 @@ add_custom_target(
 # Always include debug symbols
 #add_compile_options(-g)
 #add_compile_options(-ggdb -flto)
+
+target_link_options(firmware PUBLIC "-Wl,--wrap=malloc")
+target_link_options(firmware PUBLIC "-Wl,--wrap=_malloc_r")
+target_link_options(firmware PUBLIC "-Wl,--wrap=free")
+target_link_options(firmware PUBLIC "-Wl,--wrap=_free_r")
+
+#target_compile_definitions(firmware PUBLIC "new=new(__FILE__, __LINE__)")

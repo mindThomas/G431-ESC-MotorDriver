@@ -43,8 +43,8 @@ function(stm32_util_create_family_targets FAMILY)
                             -lc
                             -lm
                             #-lnosys
-                            -lstdc++
-                            -lsupc++
+                            #-lstdc++
+                            #-lsupc++
                             -Wl,--end-group
                             -Wl,--cref
                             #$<$<CONFIG:Debug>:-Og>

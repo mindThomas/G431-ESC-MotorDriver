@@ -377,6 +377,7 @@ foreach(COMP ${HAL_FIND_COMPONENTS_FAMILIES})
         target_compile_definitions(HAL::STM32::${FAMILY}${CORE_C} INTERFACE HAL_MODULE_ENABLED)
         target_compile_definitions(HAL::STM32::${FAMILY}${CORE_C} INTERFACE "__weak=__attribute__((weak))")
         target_compile_definitions(HAL::STM32::${FAMILY}${CORE_C} INTERFACE "__packed=__attribute__((__packed__))")
+        target_include_directories(HAL::STM32::${FAMILY}${CORE_C} INTERFACE "${CMAKE_CURRENT_LIST_DIR}/misc/STM32_HAL") # for generic stm32_hal.h include
         if(${VERBOSE})
             message("Adding general library HAL::STM32::${FAMILY}${CORE_C}")
         endif()

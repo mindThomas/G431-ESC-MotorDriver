@@ -2,7 +2,11 @@
 from threading import Thread
 import time
 import os
+import signal
+import sys
 from datetime import datetime
+from functools import partial
+from typing import Tuple
 import lspc
 
 # Plotting and GUI
@@ -45,7 +49,7 @@ class LivePlot(Tk.Frame):
         self.bufferLength = bufferLength
 
         # Construct figure
-        self.figure = plt.figure(figsize=(14, 5))
+        self.figure = plt.figure(figsize=(14, 7))
         self.ax = self.figure.add_subplot(111)
         self.ax.set_xlim([-self.bufferLength+1, 0])
         self.ax.set_ylim([0, 10])
@@ -68,7 +72,7 @@ class LivePlot(Tk.Frame):
         for graph in self.graphs:
             graph.redraw()
 
-    def addGraph(self, name, unit):
+    def addGraph(self, name, unit = '') -> collections.deque:
         graph = Graph(self.ax, self.bufferLength, len(self.graphs), name, unit)
         self.graphs.append(graph)
         return graph.buffer
@@ -81,6 +85,31 @@ class Toolbar(Tk.Frame):
         Tk.Frame.__init__(self, parent)
 
         self.callbacks = {}
+
+        lbl0 = Tk.Label(self, text="Sampling")
+        lbl0.pack(padx=5, pady=3)
+
+        self.SamplingInstances = Tk.IntVar()
+        Horizontal0a = Tk.Frame(self)
+        Horizontal0a.pack(pady=1)
+        button1 = Tk.Radiobutton(Horizontal0a, indicatoron=0, text="Dual (auto)", variable=self.SamplingInstances, font='Verdana, 10', value=0)
+        button2 = Tk.Radiobutton(Horizontal0a, indicatoron=0, text="Single", variable=self.SamplingInstances, font='Verdana, 10', value=1)
+        #button3 = Tk.Radiobutton(self, indicatoron=0, text="Three", variable=self.SamplingInstances, font='Verdana, 10', value=2)
+        button1.pack(padx=5, side="left");
+        button2.pack(padx=5, side="left");
+
+        self.SampleLocation = Tk.IntVar()
+        Horizontal0b = Tk.Frame(self)
+        Horizontal0b.pack(pady=1)
+        button3 = Tk.Radiobutton(Horizontal0b, indicatoron=0, text="Middle", variable=self.SampleLocation, font='Verdana, 10', value=0)
+        button4 = Tk.Radiobutton(Horizontal0b, indicatoron=0, text="End", variable=self.SampleLocation, font='Verdana, 10', value=1)
+        button3.pack(padx=5, side="left");
+        button4.pack(padx=5, side="left");
+
+        self.SamplingCompensation = Tk.BooleanVar()
+        SamplingCompensationBtn = Tk.Checkbutton(self, text="With compensation", variable=self.SamplingCompensation)
+        SamplingCompensationBtn.select()
+        SamplingCompensationBtn.pack();
 
         # Duty Cycle field + button
         lbl1 = Tk.Label(self, text="Duty Cycle")
@@ -175,6 +204,9 @@ class Toolbar(Tk.Frame):
         self.ToggleLogBtn = Tk.Button(self, text='Enable Logger', command=lambda: self.__btnHandler__('toggle_logger'))
         self.ToggleLogBtn.pack(padx=5, pady=20)
 
+        self.PrintCPULoad = Tk.Button(self, text='CPU Load', command=lambda: self.__btnHandler__('print_cpuload'))
+        self.PrintCPULoad.pack(padx=5, pady=0)
+
     def __btnHandler__(self, callbackName):
         #print('Button pressed')
         if callbackName in self.callbacks:
@@ -241,7 +273,7 @@ def LSPCCallback(data, params):
 
 previous_time = 0
 previous_encoder = 0
-def CombinedSampleCallback(data, params):
+def CombinedSampleCallback(data, params: Tuple[collections.deque, collections.deque, collections.deque, collections.deque, collections.deque, collections.deque, BufferedCSVwriter]):
     global previous_time
     global previous_encoder
     VIN, CS_ON, CS_OFF, RPM, BEMF, Duty, csv_obj = params
@@ -286,7 +318,11 @@ def CombinedSampleCallback(data, params):
                                    VbusON, VbusOFF, float(Encoder)])
 
 def SetDutyCycle(params):
-    com, dutyCycleField = params
+    com, dutyCycleField, samplingInstancesField, sampleLocationField = params
+
+    SingleSamplingEnabled = samplingInstancesField.get()
+    EndSamplingEnabled = sampleLocationField.get()
+
     value = float(dutyCycleField.get())
     if (value < -1):
         value = -1
@@ -297,18 +333,19 @@ def SetDutyCycle(params):
     data = int(int_value).to_bytes(length=2, byteorder='little', signed=True)
 
     print('Setting PWM Duty cycle to {}'.format(value))
-    com.transmit(0x01, bytearray(data[0:2]))
+    com.transmit(0x01, bytearray(data[0:2]) + bytearray([SingleSamplingEnabled]) + bytearray([EndSamplingEnabled]))
 
 def SetFrequencies(params):
-    com, PWMFrequencyField, SampleFrequencyField = params
+    com, PWMFrequencyField, SampleFrequencyField, samplingCompensationField = params
     PWMFrequency = int(PWMFrequencyField.get())
     SampleFrequency = int(SampleFrequencyField.get())
+    SamplingCompensation = samplingCompensationField.get()
 
     bPWMFrequency = PWMFrequency.to_bytes(length=2, byteorder='little', signed=False)
     bSampleFrequency = SampleFrequency.to_bytes(length=2, byteorder='little', signed=False)
 
     print('Setting PWM Frequency to {} and Sample frequency to {}'.format(PWMFrequency, SampleFrequency))
-    com.transmit(0x02, bytearray(bPWMFrequency + bSampleFrequency))
+    com.transmit(0x02, bytearray(bPWMFrequency + bSampleFrequency) + bytearray([SamplingCompensation]))
 
 def SetAveraging(params):
     com, AveragingCountField = params
@@ -424,7 +461,6 @@ def CalibrationBemf(params):
         vbus_btn["state"] = "normal"
         com.transmit(0x08, bytearray([0x00]))
 
-
 def AddCalibrationMeasurement(params):
     com, valueField = params
     value = float(valueField.get())
@@ -434,12 +470,28 @@ def AddCalibrationMeasurement(params):
 
     com.transmit(0x08, bytearray([0x03]) + bytearray(data[0:2]))
 
+def RequestCPULoad(params):
+    com = params
+    com.transmit(0x0E, bytearray([0x00])) # disable continuous sending
+    com.transmit(0x0F, bytearray())
+
 def CPU_Load_Print(data, params):
-    print(data.decode("utf-8"))
+    output = data.decode("utf-8").rstrip();
+    print(output)
 
 def DebugPrint(data, params):
     timestamp = datetime.now().strftime("%H:%M:%S") + ".{0:03d}".format(round(datetime.now().microsecond / 1000))
     print("[" + timestamp + "] " + data.decode("utf-8"))
+
+def signal_handler(com, root, signal, frame):
+    # Re-enabled continuous CPU load messages
+    com.transmit(0x0E, bytearray([0x01]))
+    while not com.tx_queue.empty(): # wait for message to be transmitted
+        time.sleep(0.050)
+    com.close()
+
+    root.destroy()
+    root.quit()
 
 def main():
     # Spawn GUI
@@ -453,14 +505,17 @@ def main():
     VIN = main.liveplot.addGraph('VIN', 'V')
     RPM = main.liveplot.addGraph('Speed', 'RPM')
     BEMF = main.liveplot.addGraph('BEMF', 'V')
-    Duty = main.liveplot.addGraph('Duty', '%')
+    Duty = main.liveplot.addGraph('Duty')
     main.liveplot.setYlim(-0.2, 0.8)
 
     # Connect to CAN bus
     ports = lspc.list_serial_ports()
     print(ports)
-    com = lspc.LSPC(ports[1])
+    com = lspc.LSPC(ports[0])
     com.open(1612800)
+
+    # Disable continuous CPU load messages
+    com.transmit(0x0E, bytearray([0x00]))
 
     # CSV files
     logger = BufferedCSVwriter('raw')
@@ -474,8 +529,8 @@ def main():
     com.registerCallback(0xFF, DebugPrint, ()) # Debug print
 
     # Register button press
-    main.toolbar.registerCallback('set_dutycycle', SetDutyCycle, (com, main.toolbar.DutyCycle))
-    main.toolbar.registerCallback('set_frequencies', SetFrequencies, (com, main.toolbar.PWMFrequency, main.toolbar.SampleFrequency))
+    main.toolbar.registerCallback('set_dutycycle', SetDutyCycle, (com, main.toolbar.DutyCycle, main.toolbar.SamplingInstances, main.toolbar.SampleLocation))
+    main.toolbar.registerCallback('set_frequencies', SetFrequencies, (com, main.toolbar.PWMFrequency, main.toolbar.SampleFrequency, main.toolbar.SamplingCompensation))
     main.toolbar.registerCallback('set_averaging', SetAveraging, (com, main.toolbar.AveragingCount))
     main.toolbar.registerCallback('set_current', SetCurrent, (com, main.toolbar.CurrentSetpoint))
     main.toolbar.registerCallback('set_limits', SetLimits, (main.toolbar.YlimMin, main.toolbar.YlimMax, main.liveplot.setYlim))
@@ -489,13 +544,20 @@ def main():
     main.toolbar.registerCallback('calibration_vbus', CalibrationVbus, (com, main.toolbar.AddCalibrationMeasurementButton, main.toolbar.CurrentCalibrationButton, main.toolbar.VbusCalibrationButton, main.toolbar.BemfCalibrationButton))
     main.toolbar.registerCallback('calibration_bemf', CalibrationBemf, (com, main.toolbar.AddCalibrationMeasurementButton, main.toolbar.CurrentCalibrationButton, main.toolbar.VbusCalibrationButton, main.toolbar.BemfCalibrationButton))
     main.toolbar.registerCallback('calibration_add_measurement', AddCalibrationMeasurement, (com, main.toolbar.CalibrationMeasurement))
+    main.toolbar.registerCallback('print_cpuload', RequestCPULoad, (com))
 
+    signal.signal(signal.SIGINT, partial(signal_handler, com, root))
 
     # Main Tk (window) loop
     root.mainloop()
 
     # Finished (user exit)
-    com.close()
+    if (com.isOpen):
+        # Re-enabled continuous CPU load messages
+        com.transmit(0x0E, bytearray([0x01]))
+        while not com.tx_queue.empty(): # wait for message to be transmitted
+            time.sleep(0.050)
+        com.close()
     print('Exiting...')
 
 if __name__ == '__main__':

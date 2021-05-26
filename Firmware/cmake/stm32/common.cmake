@@ -256,15 +256,28 @@ endfunction()
 #    target_link_options(${TARGET} ${VISIBILITY} -T "${SCRIPT}")
 #endfunction()
 
+#include(${CMAKE_CURRENT_LIST_DIR}/../print_target_properties.cmake)
+#
+#function(stm32_add_linker_script TARGET SCRIPT)
+#    get_filename_component(SCRIPT "${SCRIPT}" ABSOLUTE)
+#
+#    get_property(TYPE TARGET ${TARGET} PROPERTY TYPE)
+#    if(TYPE STREQUAL "EXECUTABLE")
+#        target_link_options(${TARGET} PUBLIC -T "${SCRIPT}")
+#
+#        get_propagated_target_properties(LINK_OPTIONS ${TARGET} INTERFACE_LINK_OPTIONS)
+#        message(WARNING "Link options (executable): ${LINK_OPTIONS}")
+#    else()
+#        target_link_options(${TARGET} INTERFACE -T "${SCRIPT}")
+#
+#        get_property(LINK_OPTIONS TARGET ${TARGET} PROPERTY INTERFACE_LINK_OPTIONS)
+#        message(WARNING "Link options (interface): ${LINK_OPTIONS}")
+#    endif()
+#endfunction()
+
 function(stm32_add_linker_script TARGET SCRIPT)
     get_filename_component(SCRIPT "${SCRIPT}" ABSOLUTE)
-
-    get_property(TMP TARGET ${TARGET} PROPERTY TYPE)
-    if(TMP STREQUAL "EXECUTABLE")
-        target_link_options(${TARGET} PUBLIC -T "${SCRIPT}")
-    else()
-        target_link_options(${TARGET} INTERFACE -T "${SCRIPT}")
-    endif()
+    set_property(TARGET ${TARGET} PROPERTY LINKER_FILE ${SCRIPT})
 endfunction()
 
 if(NOT (TARGET STM32::NoSys))

@@ -17,6 +17,8 @@ define_property(TARGET PROPERTY DEVICE_NAME BRIEF_DOCS "Target Device name" FULL
 
 define_property(TARGET PROPERTY DEVICE_CORE BRIEF_DOCS "Target Device core" FULL_DOCS "Target Device core, e.g. M7")
 
+define_property(TARGET PROPERTY LINKER_FILE BRIEF_DOCS "Linker File Path" FULL_DOCS "Full path to Linker File")
+
 define_property(TARGET
         PROPERTY LIBRARY_OPTIONS
         BRIEF_DOCS "List of options for a particular library"
@@ -69,6 +71,11 @@ function(stm32_add_flash_target TARGET)
             message(FATAL_ERROR "Could not get device family to add OpenOCD config")
         endif ()
 
+        get_property(DEVICE_NAME TARGET ${TARGET} PROPERTY DEVICE_NAME)
+        if (NOT DEVICE_NAME)
+            message(FATAL_ERROR "Could not get device name to add OpenOCD config")
+        endif ()
+
         string(TOLOWER ${DEVICE_FAMILY} FAMILY_L)
 
         if (EXISTS "${OPENOCD_PATH}/scripts/target/${FAMILY_L}x.cfg")
@@ -79,22 +86,25 @@ function(stm32_add_flash_target TARGET)
             message(FATAL_ERROR "Could not find OpenOCD config: ${FAMILY_L}.cfg or ${FAMILY_L}x.cfg")
         endif ()
 
-        set(OPENOCD_OUTPUT_CFG "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}_openocd.cfg")
-        add_custom_command(OUTPUT "${OPENOCD_OUTPUT_CFG}"
-                COMMAND ${CMAKE_COMMAND}
-                -DOPENOCD_CFG="${OPENOCD_OUTPUT_CFG}"
-                -DOPENOCD_FREERTOS=$<IF:$<BOOL:$<FILTER:$<TARGET_PROPERTY:${TARGET},LINK_LIBRARIES>,INCLUDE,FreeRTOS>>,1,0>
-                -DOPENOCD_TARGET_CFG="${OPENOCD_TARGET_CFG}" -P
-                "${STM32_CMAKE_DIR}/stm32/openocd_cfg.cmake")
-
-
         set(OPENOCD_CFG "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}_openocd.cfg")
-        #message("OpenOCD config file: ${OPENOCD_CFG}")
-        #        add_custom_command(OUTPUT "${OPENOCD_CFG}"
-        #                COMMAND ${CMAKE_COMMAND}
-        #                -DOPENOCD_CFG="${OPENOCD_CFG}"
-        #                -P "${STM32_CMAKE_DIR}/stm32/openocd_cfg.cmake"
-        #                )
+        add_custom_command(OUTPUT "${OPENOCD_CFG}"
+                COMMAND ${CMAKE_COMMAND}
+                -DOPENOCD_CFG="${OPENOCD_CFG}"
+                -DOPENOCD_FREERTOS=$<IF:$<BOOL:$<FILTER:$<TARGET_PROPERTY:${TARGET},LINK_LIBRARIES>,INCLUDE,FreeRTOS>>,1,0>
+                -DOPENOCD_TARGET_CFG="${OPENOCD_TARGET_CFG}"
+                -DDEVICE_NAME="STM32${DEVICE_NAME}"
+                -P "${STM32_CMAKE_DIR}/stm32/openocd_cfg.cmake")
+
+
+        add_custom_target(${TARGET}_openocd_config DEPENDS ${OPENOCD_CFG})
+        add_dependencies(${TARGET} ${TARGET}_openocd_config)
+
+        set_property(
+                TARGET ${TARGET}
+                APPEND
+                PROPERTY ADDITIONAL_CLEAN_FILES
+                ${OPENOCD_CFG} # add the OpenOCD config file to be removed when running 'make clean'
+        )
 
         # cmake-format: off
         add_custom_target(flash_${TARGET}
@@ -112,14 +122,22 @@ function(stm32_add_flash_target TARGET)
                 -c
                 "exit" # exit, resume or shutdown
                 WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-                DEPENDS ${OPENOCD_CFG} ${TARGET} $<TARGET_FILE:${TARGET}>)
+                DEPENDS ${TARGET}_openocd_config ${TARGET} $<TARGET_FILE:${TARGET}>)
+
+        add_custom_target(reset_${TARGET}
+                COMMAND ${OPENOCD_BIN} -f ${OPENOCD_CFG} -c "init" -c "targets" -c
+                "reset run"
+                -c
+                "exit" # exit, resume or shutdown
+                WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+                DEPENDS ${TARGET}_openocd_config)
 
         add_custom_target(openocd_${TARGET}
                 COMMAND ${OPENOCD_BIN}
-                -f ${OPENOCD_OUTPUT_CFG}
+                -f ${OPENOCD_CFG}
                 -c "gdb_memory_map disable"
                 WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-                DEPENDS ${OPENOCD_CFG} ${TARGET} $<TARGET_FILE:${TARGET}>)
+                DEPENDS ${TARGET}_openocd_config ${TARGET} $<TARGET_FILE:${TARGET}>)
         # cmake-format: on
     endif ()
 
@@ -250,7 +268,7 @@ function(ADD_LIBRARY_OPTION_WITH_DEPENDENCY LIBRARY OPTION EXTRA_DEPENDENCIES)
 
     target_compile_definitions(
             ${LIBRARY} INTERFACE
-            $<$<IN_LIST:${LIBRARY_U}_USE_${OPTION_U},$<TARGET_PROPERTY:LIBRARY_OPTIONS>>:"${LIBRARY_U}_USE_${OPTION_U}">
+            $<$<IN_LIST:${LIBRARY_U}_USE_${OPTION_U},$<TARGET_PROPERTY:LIBRARY_OPTIONS>>:${LIBRARY_U}_USE_${OPTION_U}>
     )
 
     target_link_libraries(
@@ -266,7 +284,7 @@ function(ADD_LIBRARY_OPTION LIBRARY OPTION)
 
     target_compile_definitions(
             ${LIBRARY} INTERFACE
-            $<$<IN_LIST:${LIBRARY_U}_USE_${OPTION_U},$<TARGET_PROPERTY:LIBRARY_OPTIONS>>:"${LIBRARY_U}_USE_${OPTION_U}">
+            $<$<IN_LIST:${LIBRARY_U}_USE_${OPTION_U},$<TARGET_PROPERTY:LIBRARY_OPTIONS>>:${LIBRARY_U}_USE_${OPTION_U}>
     )
 endfunction()
 
@@ -356,4 +374,4 @@ endfunction()
 
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/misc/DefaultInterrupts misc/DefaultInterrupts)
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/misc/Syscalls misc/Syscalls)
-add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/misc/FreeRTOSHeapNewlib misc/FreeRTOSHeapNewlib)
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/misc/Sysmem misc/Sysmem)

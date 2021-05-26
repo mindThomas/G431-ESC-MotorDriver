@@ -47,6 +47,7 @@ SECTIONS\n\
     *(.glue_7)\n\
     *(.glue_7t)\n\
     *(.eh_frame)\n\
+    *(.data.__global_locale) /* move newlib locale into FLASH. See https://bugs.launchpad.net/gcc-arm-embedded/+bug/1686067 */\n\
 \n\
     KEEP (*(.init))\n\
     KEEP (*(.fini))\n\

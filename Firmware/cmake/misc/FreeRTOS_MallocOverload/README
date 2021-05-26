@@ -1,0 +1,2 @@
+Link against the following library to overload malloc and free to use the FreeRTOS variants (pvPortMalloc and vPortFree):
+FreeRTOS::MallocOverload

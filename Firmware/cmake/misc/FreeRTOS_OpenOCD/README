@@ -1,0 +1,2 @@
+Include FreeRTOS OpenOCD debug information by linking against:
+FreeRTOS::OpenOCD

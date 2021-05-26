@@ -1,16 +1,5 @@
 # ESC MotorDriver firmware for STM32G431
 
-### Cloning the repository
-If you have not already cloned this repository you do so by using the following command to include the tested acados version:
-```
-git clone --recursive https://github.com/mindThomas/acados-STM32.git
-```
-
-If you have already cloned it you need to run:
-```
-git submodule update --init --recursive
-```
-
 ## ARM Toolchain
 This project requires [CMake](https://cmake.org/download/) 3.15 or later and the [arm-none-eabi-gcc toolchain](https://developer.arm.com/tools-and-software/open-source-software/developer-tools/gnu-toolchain/gnu-rm/downloads) to be installed seperately.
 This project was recently tested and used with the [GNU Arm Embedded Toolchain Version 7-2018-q2-update](https://developer.arm.com/tools-and-software/open-source-software/developer-tools/gnu-toolchain/gnu-rm/downloads/7-2018-q2-update).
@@ -80,8 +69,8 @@ Next find the `cubeprogrammer` subfolder also under plugins. Note this as `CUBE_
 Create a GDB server launch script as `stlink_gdb_launch.sh`:
 ```
 #!/bin/sh
-GDB_SERVER_PATH=~/st/stm32cubeide_1.4.0/plugins/com.st.stm32cube.ide.mcu.externaltools.stlink-gdb-server.linux64_1.6.0.202101291314/tools/bin
-CUBE_PROGRAMMER_PATH=~/st/stm32cubeide_1.4.0/plugins/com.st.stm32cube.ide.mcu.externaltools.cubeprogrammer.linux64_1.4.0.202007081208/tools/bin
+GDB_SERVER_PATH=~/st/stm32cubeide_1.6.0/plugins/com.st.stm32cube.ide.mcu.externaltools.stlink-gdb-server.linux64_1.6.0.202101291314/tools/bin
+CUBE_PROGRAMMER_PATH=~/st/stm32cubeide_1.6.0/plugins/com.st.stm32cube.ide.mcu.externaltools.cubeprogrammer.linux64_1.6.0.202101291314/tools/bin
 
 PATH=$PATH:$GDB_SERVER_PATH
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$GDB_SERVER_PATH/native/linux_x64/
@@ -91,11 +80,26 @@ ST-LINK_gdbserver -e -f debug.log -p 61234 -r 15 -d -cp $CUBE_PROGRAMMER_PATH
 Finally create an `Embedded GDB Server` configuration in CLion where you:
 1. Use `Bundled GDB`
 2. Set the Download executable to `Always`.
-3. Set `target remote` args to: `localhos:61234`
+3. Set `target remote` args to: `localhost:61234`
 4. Set the GDB Server to the `stlink_gdb_launch.sh` script
+
+### Upgrade ST-Link firmware
+This requires an existing installation of STM32CubeIDE.
+Find the installation folder and find the `stlink-gdb-server` subfolder which was noted as `GDB_SERVER_PATH` above. Now launch the upgrade tool with:
+
+```
+java -jar $GDB_SERVER_PATH/STLinkUpgrade.jar
+```
+
+
 
 ## FreeRTOS useful variables
 List all tasks, needs a breakpoint after calling `uxTaskGetSystemState` (e.g. in `CPULoad.cpp`)
 ```
 (TaskStatus_t[uxCurrentNumberOfTasks])*pxTaskStatusArray
+```
+
+List all registered Queues (including semaphores):
+```
+xQueueRegistry
 ```
