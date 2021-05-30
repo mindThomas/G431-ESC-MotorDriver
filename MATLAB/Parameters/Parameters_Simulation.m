@@ -1,5 +1,6 @@
 % Sensor Noise parameters
 EnableNoise = false;
+EnableADCquantization = true;
 
 % Specify noise variance for simulated sensors (can be the same as used in estimator)     
 sensor_sigma2_encoder = 0.5;
