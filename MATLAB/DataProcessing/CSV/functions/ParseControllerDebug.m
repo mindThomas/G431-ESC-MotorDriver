@@ -12,6 +12,6 @@ function out = ParseControllerDebug(array)
 	out.omega_filtered = array(:,6);
 
 	out.integral = array(:,7);
-	out.PI_out = array(:,8);
+	out.PI = array(:,8);
 	out.duty = array(:,9);    
 end

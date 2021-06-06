@@ -1,3 +1,6 @@
 [submodule "Firmware/STM32-libraries"]
 	path = Firmware/STM32-libraries
 	url = https://github.com/mindThomas/STM32-libraries.git
+[submodule "MATLAB/MATLAB-tools"]
+	path = MATLAB/MATLAB-tools
+	url = https://github.com/mindThomas/MATLAB-tools.git
