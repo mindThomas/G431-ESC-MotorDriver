@@ -14,4 +14,4 @@ Ts_backemf = 1 / 100; % 100 Hz
 
 %% Current sampler
 current_sample_end_time_offset = 0e-6; % e.g ADC sample time
-Ts_current = 1/PWM_Frequency; % 1 / 10000; % 100 Hz, used for ideal (average) sampler
+Ts_CurrentSampling = 1/PWM_Frequency; % 1 / 10000; % 100 Hz, used for ideal (average) sampler

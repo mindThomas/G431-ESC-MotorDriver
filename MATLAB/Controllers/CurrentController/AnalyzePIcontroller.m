@@ -1,3 +1,6 @@
+scriptDir = fileparts(mfilename('fullpath'));
+addpath(fullfile(scriptDir, '../../DataProcessing/CSV'));
+
 dump = LoadControllerDump('C:\Users\Thomas\Documents\motordriver-python', '2020-07-20_00-11-32-305_controller.csv')
 dump = Trim(dump, 1);
 

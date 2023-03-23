@@ -13,12 +13,14 @@ export PATH=$PATH:/path/to/xpack-openocd-0.11.0-1/bin
 ```
 
 ## IDE
-Please note that [CLion](https://www.jetbrains.com/clion/) can be used to load the project and comes bundled with OpenOCD: https://www.jetbrains.com/help/clion/openocd-support.html
+Please note that [CLion](https://www.jetbrains.com/clion/) can be used to load the project and comes bundled with OpenOCD: https://www.jetbrains.com/help/clion/openocd-support.html See also this CMake on STM32 guide with CLion: https://dev.to/younup/cmake-on-stm32-episode-2-build-with-clion-2lae
 Just select the automatically generated OpenOCD configuration file when creating the __OpenOCD Download & Run__ configuration. Remember also to set:
  - `Download` --> `Updated Only`
  - `Reset` --> `Halt`   _(this appears to be highly important, otherwise registers etc. is not reset/cleared after starting a new debug and flashing)_
 
 Alternatively VS Code can be used: https://medium.com/@lixis630/getting-started-to-code-embedded-c-on-stm32-e90e7910b2c
+
+Finally the STM32 CubeIDE can also be used with CMake by installing **cmake4eclipse** and **CMake Editor**, see: https://community.st.com/s/question/0D53W00000S6Wiu/stm32cubeide-cmake-integration
 
 ## CLion tricks
 To show the content of an array of data given by its pointer, `char * data`, and its length, add the following cast to the watch or evaluation expression:

@@ -61,5 +61,5 @@ CurrentSense_Voffset = ADC_Vref/(CurrentSense_R2 * (1/CurrentSense_R1 + 1/Curren
 %    b = -Voffset/(G * Rsense)
 
 % Microprocessor specifics
-PWM_Frequency = 2000; % Hz
+PWM_Frequency = 20000; % Hz
 PWM_Resolution = 100; % steps

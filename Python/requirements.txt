@@ -21,3 +21,15 @@ cobs
 # For auto-formatting
 black>=20.8b1
 isort>=5.8.0
+pydocstyle
+flake8
+flake8-black
+flake8-builtins
+flake8-pytest-style
+flake8-docstrings
+flake8-length
+flake8-isort
+pytest
+pytest-cov
+pytest-xdist
+coverage

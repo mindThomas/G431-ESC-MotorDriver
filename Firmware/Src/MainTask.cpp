@@ -33,6 +33,7 @@
 #include <CANBus/CANBus.hpp>
 #include <Timer/Timer.hpp>
 #include <SyncedPWMADC/SyncedPWMADC.hpp>
+#include <EEPROM/EEPROM.hpp>
 
 /* Include Drivers */
 
@@ -76,6 +77,8 @@ void SetActiveInactive_Callback(void *param, const std::vector<uint8_t> &data);
 void StartFrequencySweep_Callback(void *param, const std::vector<uint8_t> &data);
 
 void FrequencySweepThread(void *pvParameters);
+void FrequencySweepThread2(void *pvParameters);
+void FrequencySweepThread3(void *pvParameters);
 
 void StartDutySweep_Callback(void *param, const std::vector<uint8_t> &data);
 
@@ -131,8 +134,8 @@ size_t freeHeapBytes = 0;
 
 bool CurrentControllerEnabled = false;
 float CurrentSetpoint = 0.0f;
-float Controller_Kp = 4.0;
-float Controller_Ti = 12.0 * 40;
+float Controller_Kp = 2.0;//4.0;
+float Controller_Ti = 1300;//12.0 * 40;
 
 void SetCurrentSetpoint_Callback(void *param, const std::vector<uint8_t> &data);
 
@@ -150,6 +153,13 @@ void EnableContinuousCPUStats_Callback(void *param, const std::vector<uint8_t> &
 
 void SendCPUStats_Callback(void *param, const std::vector<uint8_t> &data);
 
+typedef struct TestParameters
+{
+    uint32_t time;
+    uint16_t test;
+    float verification;
+};
+
 void MainTask(void *pvParameters) {
     /* Use this task to:
      * - Create objects for each module
@@ -161,6 +171,21 @@ void MainTask(void *pvParameters) {
      *
      * Basically anything related to starting the system should happen in this thread and NOT in the main() function !!!
      */
+
+    // Initialize EEPROM for parameters
+    EEPROM *eeprom = new EEPROM();
+    eeprom->EnableSection(eeprom->sections.parameters, sizeof(TestParameters)); // enable Parameters section in EEPROM
+    eeprom->Initialize();
+
+    // Parameter example
+    TestParameters parameters;
+    if (eeprom->ReadData(eeprom->sections.parameters, (uint8_t *)&parameters, sizeof(TestParameters))) {
+        // Parameter not found
+        TestParameters parametersDefault{12345678, 65500, 12.345};
+        eeprom->WriteData(eeprom->sections.parameters, (uint8_t *)&parametersDefault, sizeof(TestParameters));
+        eeprom->ReadData(eeprom->sections.parameters, (uint8_t *)&parameters, sizeof(TestParameters));
+    }
+
     UART *uart = new UART(UART::PORT_UART2, 1612800, 100, true);
     LSPC *lspc = new LSPC(uart, LSPC_RECEIVER_PRIORITY, LSPC_TRANSMITTER_PRIORITY);
     Debug::AssignDebugCOM((void *) lspc);
@@ -494,13 +519,50 @@ void StartFrequencySweep_Callback(void *param, const std::vector<uint8_t> &data)
             }
         }
         CurrentControllerEnabled = false;
-        xTaskCreate(FrequencySweepThread, (char *) "Frequency sweep", 256, (void *) motor, 6,
+        xTaskCreate(FrequencySweepThread3, (char *) "Frequency sweep", 256, (void *) motor, 6,
                     &FrequencySweepTaskHandle);
     }
 }
 
-
 void FrequencySweepThread(void *pvParameters) {
+    SyncedPWMADC *motor = (SyncedPWMADC *) pvParameters;
+    motor->SetOperatingMode(SyncedPWMADC::BRAKE);
+    motor->SetSamplingInterval(4);
+    motor->SetNumberOfAveragingSamples(1);
+
+    // Constant frequency sweep with constant duty cycle and same sampling location
+    const float duty = 0.5;
+    uint32_t freq = 250;
+    motor->SetPWMFrequency(freq); // configure prescaler using starting frequency
+    motor->WaitForNewQueuedSample();
+    freq = 250;
+
+    while (freq <= 5000) {
+        uint8_t interval = std::max(uint8_t{2}, static_cast<uint8_t>(std::ceil((float)freq / 100)));
+
+        motor->SetPWMFrequency(freq);
+        //motor->SetSamplingInterval(std::max(uint8_t{2}, interval));
+        //motor->SetNumberOfAveragingSamples(std::max(uint8_t{1}, static_cast<uint8_t>(interval-2)));
+        motor->SetSamplingInterval(12);
+        motor->SetNumberOfAveragingSamples(10);
+
+        //motor->SetDutyCycle_CustomSampling(duty, duty - 0.1, 0.9); // these sample locations also fulfills the "outside of ripple"-zone up to 5 KHz for 50% duty (for 30% duty the first will be 0.275)
+        motor->SetDutyCycle_EndSampling(0.5);
+        if (motor->AnyTriggerEnabled()) {
+            //for (uint8_t samples = 0; samples < 50; samples++) {
+                motor->WaitForNewQueuedSample();
+            //}
+        }
+        freq += 5;
+    }
+
+    motor->SetDutyCycle_EndSampling(0);
+    motor->SetPWMFrequency(250);
+
+    vTaskDelete(NULL); // delete/stop this current task
+}
+
+void FrequencySweepThread2(void *pvParameters) {
     SyncedPWMADC *motor = (SyncedPWMADC *) pvParameters;
     motor->SetOperatingMode(SyncedPWMADC::BRAKE);
     motor->SetSamplingInterval(2);
@@ -521,12 +583,22 @@ void FrequencySweepThread(void *pvParameters) {
         //motor->SetDutyCycle_EndSampling(0.5);
         float duty_step = 0.4;
         for (float duty = 0.1; duty < 0.91; duty += duty_step) {
+            // Change duty cycle and wait for some settling time
+            //motor->SetDutyCycle_CustomSampling(duty, 0, 0);
+            //osDelay(500);
+            // Not deemed necessary. Doesn't affect the results much.
+
             motor->SetDutyCycle_CustomSampling(duty, duty - 0.025,
                                                0.975); // these sample locations also fulfills the "outside of ripple"-zone up to 5 KHz for 50% duty (for 30% duty the first will be 0.275)
             for (uint8_t samples = 0; samples < 50; samples++)
                 motor->WaitForNewQueuedSample();
         }
         for (float duty = 0.9 - duty_step; duty > 0.09; duty -= duty_step) {
+            // Change duty cycle and wait for some settling time
+            //motor->SetDutyCycle_CustomSampling(duty, 0, 0);
+            //osDelay(500);
+            // Not deemed necessary. Doesn't affect the results much.
+
             motor->SetDutyCycle_CustomSampling(duty, duty - 0.025,
                                                0.975); // these sample locations also fulfills the "outside of ripple"-zone up to 5 KHz for 50% duty (for 30% duty the first will be 0.275)
             for (uint8_t samples = 0; samples < 50; samples++)
@@ -541,7 +613,7 @@ void FrequencySweepThread(void *pvParameters) {
     vTaskDelete(NULL); // delete/stop this current task
 }
 
-void FrequencySweepThread2(void *pvParameters) {
+void FrequencySweepThread3(void *pvParameters) {
     SyncedPWMADC *motor = (SyncedPWMADC *) pvParameters;
     motor->SetOperatingMode(SyncedPWMADC::BRAKE);
     motor->SetSamplingInterval(2);
@@ -564,6 +636,16 @@ void FrequencySweepThread2(void *pvParameters) {
             }
 
             motor->SetPWMFrequency(freq, false);
+
+            // Change duty cycle and wait for some settling time
+            /*motor->SetDutyCycle_CustomSampling(duty, 0, 0);
+            if (freq == 250) {
+                osDelay(500);
+            } else {
+                osDelay(50);
+            }*/
+            // Not deemed necessary. Doesn't affect the results much.
+
             //motor->SetDutyCycle_EndSampling(0.5);
             motor->SetDutyCycle_CustomSampling(duty, duty - 0.025,
                                                0.975); // these sample locations also fulfills the "outside of ripple"-zone up to 5 KHz for 50% duty (for 30% duty the first will be 0.275)
@@ -690,14 +772,21 @@ void SampleLocationSweepThread(void *pvParameters) {
     //motor->SetNumberOfAveragingSamples(2);
     motor->SetDutyCycle_EndSampling(0.5);
 
-    for (uint32_t freq = 200; freq <= 2000; freq += 200) {
+    // Also support sweeping only the sample location indefinitely with a constant duty cycle and frequency
+    //uint32_t freq = 20000;
+    //while (1) {
+    for (float freq = 200; freq <= 20000; freq *= 1.2) {
+        uint8_t interval = std::max(uint8_t{2}, static_cast<uint8_t>(std::ceil((float)freq / 100)));
+
         motor->SetPWMFrequency(freq);
-        motor->SetSamplingInterval(3);
-        motor->SetNumberOfAveragingSamples(2);
-        motor->SetCustomSamplingLocations(0.02);
-        for (float sampleLocation = 0.04; sampleLocation <= 0.98; sampleLocation += 0.02) {
-            motor->WaitForNewQueuedSample();
-            motor->SetCustomSamplingLocations(sampleLocation);
+        motor->SetSamplingInterval(std::max(uint8_t{2}, interval));
+        motor->SetNumberOfAveragingSamples(std::max(uint8_t{1}, static_cast<uint8_t>(interval-2)));
+        motor->SetDutyCycle_CustomSampling(0.5, 0.02);
+        for (float sampleLocation = 0.03; sampleLocation <= 0.98; sampleLocation += 0.01) {
+            if (motor->AnyTriggerEnabled()) {
+                motor->WaitForNewQueuedSample();
+            }
+            motor->SetDutyCycle_CustomSampling(0.5, sampleLocation);
         }
     }
 
@@ -1036,27 +1125,38 @@ void CurrentControllerThread(void *pvParameters) {
     SyncedPWMADC *motor = params->motor;
     LSPC *lspc = params->lspc;
 
-    constexpr bool CURRENT_FILTERING_ENABLED = false;
+    constexpr bool CURRENT_FILTERING_ENABLED = true;
     constexpr bool VIN_FILTERING_ENABLED = false;
     constexpr bool OMEGA_FEEDFORWARD_ENABLED = false;
+    constexpr bool OMEGA_FILTERING_ENABLED = true;
     constexpr bool CURRENT_SETPOINT_FEEDFORWARD_ENABLED = false;
 
     constexpr uint32_t PWM_FREQ = 20000;
-    constexpr uint32_t CURRENT_CONTROLLER_FREQ = 2000;
+    constexpr uint32_t CURRENT_CONTROLLER_FREQ = 10000;
+    constexpr float    CURRENT_CONTROLLER_TS = 1.f / CURRENT_CONTROLLER_FREQ;
     constexpr uint16_t SAMPLING_INTERVAL = PWM_FREQ / CURRENT_CONTROLLER_FREQ;
+    constexpr uint32_t TRANSMIT_FREQ = 2000;
+    constexpr uint16_t TRANSMIT_INTERVAL = CURRENT_CONTROLLER_FREQ / TRANSMIT_FREQ + 1;
+    constexpr uint32_t TIMING_PRINTOUT_FREQ = 2;
+    constexpr uint16_t TIMING_PRINTOUT_INTERVAL = CURRENT_CONTROLLER_FREQ / TIMING_PRINTOUT_FREQ + 1;
+    constexpr float    CURRENT_LPF_FREQ = 500;
+    constexpr float    SPEED_LPF_FREQ = 20;
+    constexpr float    VIN_LPF_FREQ = 20;
+    constexpr float    ENCODER_COUNT_ACCUMULATION_TIME = 0.02; // accumulate counts over 20 ms
+    constexpr uint16_t ENCODER_COUNT_ACCUMULATION_INTERVAL = ENCODER_COUNT_ACCUMULATION_TIME / CURRENT_CONTROLLER_TS;
 
     {
-        FirstOrderLPF LPF_Omega(1.f / CURRENT_CONTROLLER_FREQ, 20);
-        FirstOrderLPF LPF_Current(1.f / CURRENT_CONTROLLER_FREQ, 200);
-        FirstOrderLPF LPF_Vin(1.f / CURRENT_CONTROLLER_FREQ, 20);
+        FirstOrderLPF LPF_Current(CURRENT_CONTROLLER_TS, CURRENT_LPF_FREQ);
+        FirstOrderLPF LPF_Omega(CURRENT_CONTROLLER_TS, SPEED_LPF_FREQ);
+        FirstOrderLPF LPF_Vin(CURRENT_CONTROLLER_TS, VIN_LPF_FREQ);
 
-        CircularBuffer<float> Encoder_Times(40, true);
-        CircularBuffer<int32_t> Encoder_Ticks(40, true);
+        CircularBuffer<float> Encoder_Times(ENCODER_COUNT_ACCUMULATION_INTERVAL, true);
+        CircularBuffer<int32_t> Encoder_Ticks(ENCODER_COUNT_ACCUMULATION_INTERVAL, true);
 
         motor->SetOperatingMode(SyncedPWMADC::BRAKE);
         motor->SetPWMFrequency(PWM_FREQ);
         motor->SetSamplingInterval(SAMPLING_INTERVAL);
-        motor->SetNumberOfAveragingSamples(SAMPLING_INTERVAL-2);
+        motor->SetNumberOfAveragingSamples(std::max(1, SAMPLING_INTERVAL-2));
         motor->SetDutyCycle_MiddleSamplingOnce(0.0f);
 
         motor->WaitForNewSample();
@@ -1071,14 +1171,18 @@ void CurrentControllerThread(void *pvParameters) {
 
         float integral = 0.f;
         float prev_error = 0.f;
+        uint32_t transmitIteration = 0;
+        uint32_t timingPrintoutIteration = 0;
 
-        bool TransmitDebugDownsample = true;
+        uint32_t prevTime = 0;
 
         SyncedPWMADC::OperatingMode_t PreviousMode = SyncedPWMADC::BRAKE;
         CurrentControllerEnabled = true;
         while (CurrentControllerEnabled) {
             //motor->WaitForNewQueuedSample();
             motor->WaitForNewSample();
+
+            const auto startTime = HAL_GetHighResTick();
             sample = motor->GetLatestSample();
 
             // Average current
@@ -1128,7 +1232,9 @@ void CurrentControllerThread(void *pvParameters) {
                                         Encoder_Ticks.Back(); // OBS. We might need to consider wrapping if the motor will be running for a long time?
                 float omega_filtered =
                         M_2PI * ((float) encoder_delta / motor->MotorParameters.TicksAfterGearing) / encoder_delta_time;
-                omega_filtered = LPF_Omega.Filter(omega_filtered);
+                if (OMEGA_FILTERING_ENABLED) {
+                    omega_filtered = LPF_Omega.Filter(omega_filtered);
+                }
 
                 /* PI Controller */
                 float Kp = Controller_Kp;
@@ -1160,10 +1266,10 @@ void CurrentControllerThread(void *pvParameters) {
                 // Convert to duty cycle
                 float duty = u / vin_filtered;
 
-                if (CurrentSetpoint == 0) {
+                /*if (CurrentSetpoint == 0) {
                     duty = 0.0f;
                     integral = 0;
-                }
+                }*/
 
                 if (duty > 1.0f) {
                     duty = 1.0f;
@@ -1184,19 +1290,30 @@ void CurrentControllerThread(void *pvParameters) {
                 }*/
                 motor->SetDutyCycle_MiddleSamplingOnce(duty);
 
-                //if (TransmitDebugDownsample) {
-                controllerDebug.Timestamp = sample.Timestamp;
-                controllerDebug.current_setpoint = CurrentSetpoint;
-                controllerDebug.omega_measurement = omega;
-                controllerDebug.omega_filtered = omega_filtered;
-                controllerDebug.current_measurement = current;
-                controllerDebug.current_filtered = current_filtered;
-                controllerDebug.integral = integral;
-                controllerDebug.PI_out = PI_out;
-                controllerDebug.duty = duty;
-                lspc->TransmitAsync(0x05, (uint8_t *) &controllerDebug, sizeof(ControllerDebug_t));
-                /*}
-                TransmitDebugDownsample = !TransmitDebugDownsample;*/
+                const auto endTime = HAL_GetHighResTick();
+
+                const auto computationTime = endTime - startTime;
+                const auto intervalTime = startTime - prevTime;
+
+                if ((transmitIteration++ % TRANSMIT_INTERVAL) == 0) {
+                    controllerDebug.Timestamp = sample.Timestamp;
+                    controllerDebug.current_setpoint = CurrentSetpoint;
+                    controllerDebug.omega_measurement = omega;
+                    controllerDebug.omega_filtered = omega_filtered;
+                    controllerDebug.current_measurement = current;
+                    controllerDebug.current_filtered = current_filtered;
+                    controllerDebug.integral = integral;
+                    controllerDebug.PI_out = PI_out;
+                    controllerDebug.duty = duty;
+                    lspc->TransmitAsync(0x05, (uint8_t *) &controllerDebug, sizeof(ControllerDebug_t));
+                }
+
+                if ((timingPrintoutIteration++ % TIMING_PRINTOUT_INTERVAL) == 0) {
+                    Debug::printf("Computation time = %2.3f ms\n", 1000*HAL_Tick2Time(computationTime));
+                    Debug::printf("Interval time = %2.3f ms\n", 1000*HAL_Tick2Time(intervalTime));
+                }
+
+                prevTime = startTime;
             }
         }
 

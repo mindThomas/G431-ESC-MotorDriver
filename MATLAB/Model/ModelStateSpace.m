@@ -76,6 +76,7 @@ for (j = 1:size(fields))
         end
     end
 end
+return;
 
 %% State space to Transfer function
 % Select from u to i

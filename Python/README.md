@@ -1,8 +1,11 @@
+# G431 ESC Python tools
+
 ## Environment setup instructions
+
 1. Install Anaconda or Miniconda
 2. Create the environment `conda create -y --name esc python=3.7`
      1. Alternatively based on the environment file
-`conda env create environment.yml -n esc`
+     `conda env create environment.yml -n esc`
 3. Activate the environment
 `conda activate esc`
 4. Install libraries from the requirements file (can be omitted if the environment-file based setup is used: `pip3 install -r requirements.txt`

@@ -1,13 +1,15 @@
 function out = ParseCombinedSample(array, varargin)
     if (length(varargin) > 0)
         filter_speed = varargin{1};
+    else
+        filter_speed = false;
     end
     if (size(array,2) ~= 12) 
         error('Incorrect dump array size when parsing');
     end
     out.time = array(:,1);
     
-    out.PWM_Frequency = array(:,2);
+    out.TimerFrequency = array(:,2);
     out.TimerMax = array(:,3);
     
     out.DutyCycleLocation = array(:,4);
@@ -32,20 +34,20 @@ function out = ParseCombinedSample(array, varargin)
 
     TicksPrRev = 1920; % this should be moved out of here and loaded from a config
     if (filter_speed)
-        t_speed_downsampled = out.time(1):0.005:out.time(end);
-        encoder_downsampled = interp1(out.time, out.encoder, t_speed_downsampled);        
+        t_speed_downsampled = out.time(1):0.01:out.time(end);
+        encoder_downsampled = interp1(out.time, out.Encoder, t_speed_downsampled);        
         speed = 2*pi/TicksPrRev * diff(encoder_downsampled) ./ diff(t_speed_downsampled);
         speed(end+1) = speed(end);
     
         time_speed = (t_speed_downsampled(1:end-1) + t_speed_downsampled(2:end)) / 2;
         time_speed(end+1) = 2*time_speed(end) - time_speed(end-1);                
     else             
-        speed = 2*pi/TicksPrRev * diff(out.encoder) ./ diff(out.time);
+        speed = 2*pi/TicksPrRev * diff(out.Encoder) ./ diff(out.time);
         speed(end+1) = speed(end);
     
         time_speed = (out.time(1:end-1) + out.time(2:end)) / 2;
         time_speed(end+1) = 2*time_speed(end) - time_speed(end-1);                
     end
     out.Speed = interp1(time_speed, speed, out.time, 'linear', 'extrap');   
-    out.RPM = 60 * out.speed / (2*pi);    
+    out.RPM = 60 * out.Speed / (2*pi);    
 end

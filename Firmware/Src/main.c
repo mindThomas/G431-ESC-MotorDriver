@@ -29,41 +29,56 @@
 
 /* Private includes ----------------------------------------------------------*/
 #include "MainTask.h"
-#include "TestTask.h"
-#include "ProcessorInit.h"
 #include "MemoryManagement.h"
 #include "Priorities.h"
+#include "ProcessorInit.h"
+#include "TestTask.h"
 #include <MATLABCoderInit/MATLABCoderInit.h>
 
 /* Private variables ---------------------------------------------------------*/
 TaskHandle_t mainTaskHandle;
 
 /**
-  * @brief  The application entry point.
-  * @retval int
-  */
+ * @brief  The application entry point.
+ * @retval int
+ */
 int main(void)
 {
-  /* MCU Configuration--------------------------------------------------------*/
-  /* Configure the system clock - needs to be done as the first thing */
-  SystemClock_Config();
+    /* MCU Configuration--------------------------------------------------------*/
+    /* Configure the system clock - needs to be done as the first thing */
+    SystemClock_Config();
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
+    /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+    HAL_Init();
 
-  MATLABCoder_initialize();
+    MATLABCoder_initialize();
 
-  enableMallocTracking();
+    enableMallocTracking();
 
-  /* Create the main thread which creates objects and spawns the rest of the threads */
-  xTaskCreate(MainTask, "mainTask", 300, (void*) NULL, MAIN_TASK_PRIORITY, &mainTaskHandle);
+    /* Create the main thread which creates objects and spawns the rest of the threads */
+    xTaskCreate(MainTask, "mainTask", 300, (void*)NULL, MAIN_TASK_PRIORITY, &mainTaskHandle);
 
-  /* Start scheduler */
-  osKernelStart();
-  
-  /* We should never get here as control is now taken by the scheduler */
+    /* Start scheduler */
+    osKernelStart();
 
-  /* Infinite loop */
-  while (1);
+    /* We should never get here as control is now taken by the scheduler */
+
+    /* Infinite loop */
+    while (1) {}
 }
 
+/**
+ * Initializes the Global MSP.
+ */
+void HAL_MspInit(void)
+{
+    __HAL_RCC_SYSCFG_CLK_ENABLE();
+    __HAL_RCC_PWR_CLK_ENABLE();
+
+    /* System interrupt init*/
+    /* PendSV_IRQn interrupt configuration */
+    HAL_NVIC_SetPriority(PendSV_IRQn, 15, 0);
+
+    /** Disable the internal Pull-Up in Dead Battery pins of UCPD peripheral */
+    LL_PWR_DisableDeadBatteryPD();
+}

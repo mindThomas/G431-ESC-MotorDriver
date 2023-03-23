@@ -33,7 +33,6 @@ add_executable(firmware
                #Src/syscalls.c
                #Src/freertos.c
                Src/ProcessorInit.c
-               Src/stm32g4xx_hal_msp.c
                #Src/stm32g4xx_it.c
                #Src/TestTask.cpp
                #Src/heap_useNewlib.c # Src/MemoryManagement.c
@@ -69,6 +68,7 @@ target_link_libraries(firmware PRIVATE
                       STM32G4_Timer
                       STM32G4_UART
                       STM32G4_PrecisionSysTick
+                      STM32G4_EEPROM
                       # Other libraries
                       MATLABCoderInit
         Debug
@@ -82,7 +82,7 @@ target_link_libraries(firmware PRIVATE
         DefaultInterrupts
         )
 
-#stm32_add_linker_script(firmware Src/G431CB.ld) # override linker file
+stm32_add_linker_script(firmware Src/G431CB_WithEEProm.ld) # override linker file
 stm32_add_startup_script(firmware Src/startup_stm32g431xx.s) # override default startup file
 
 target_compile_definitions(firmware PUBLIC FREERTOS_USE_NEWLIB)
