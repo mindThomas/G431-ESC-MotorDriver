@@ -17,5 +17,11 @@
     "cmake.configureSettings": {
         // Additional CMake arguments
     },
-    "C_Cpp.intelliSenseEngine": "default"
+    "C_Cpp.intelliSenseEngine": "default",
+    "C_Cpp.codeAnalysis.clangTidy.args": ["--extra-arg=-mno-sse2"],
+    "C_Cpp.codeAnalysis.clangTidy.useBuildPath": true,
+    "C_Cpp.codeAnalysis.clangTidy.enabled": true,
+    "C_Cpp.default.cppStandard": "c++11",
+    "C_Cpp.clang_format_style": "file://${workspaceFolder}/.clang-format",
+    "C_Cpp.clang_format_fallbackStyle": "none"
 }
