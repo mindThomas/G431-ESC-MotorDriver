@@ -21,6 +21,16 @@ find_package(FreeRTOS
              COMPONENTS ARM_CM4F
              REQUIRED)
 
+# Use the portable.h file from the Inc directory instead of the one from FreeRTOS
+add_custom_target(
+    custom_freertos_portable_h ALL
+    COMMAND ${CMAKE_COMMAND} -E copy
+            ${CMAKE_SOURCE_DIR}/Inc/portable.h
+            ${CMAKE_SOURCE_DIR}/cmake/other/stm32_mw_freertos/Source/include/portable.h
+    COMMENT "Replacing portable.h with the one from Inc/portable.h"
+)
+add_dependencies(FreeRTOS custom_freertos_portable_h)
+
 # Add STM32-libraries
 add_subdirectory(STM32-libraries stm32-libraries) # has to come after find_package
 
